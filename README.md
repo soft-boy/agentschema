@@ -1,20 +1,20 @@
-# agentspec
+# agentschema
 
 ## Install
 
 ```sh
-npm install -g @soft-boy/agentspec
+npm install -g @soft-boy/agentschema
 ```
 
 ## Usage
 
 ```sh
-agentspec
+agentschema
 ```
 
 ## Development
 
 ```sh
-npm link    # makes `agentspec` available globally from this checkout
-agentspec
+npm link    # makes `agentschema` available globally from this checkout
+agentschema
 ```

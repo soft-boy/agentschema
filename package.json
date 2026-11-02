@@ -1,10 +1,10 @@
 {
-  "name": "@soft-boy/agentspec",
+  "name": "@soft-boy/agentschema",
   "version": "0.1.0",
-  "description": "Markdown based AI agent specification",
+  "description": "Markdown based AI agent schema",
   "type": "module",
   "bin": {
-    "agentspec": "bin/agentspec.js"
+    "agentschema": "bin/agentschema.js"
   },
   "files": [
     "bin"

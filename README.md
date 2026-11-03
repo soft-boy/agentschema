@@ -1,6 +1,6 @@
 # agentschema
 
-Define a Claude Managed Agent as a folder of Markdown files.
+Define an AI-Agent as a folder of Markdown files.
 
 ```
 my-agent/
@@ -8,7 +8,7 @@ my-agent/
 └── env.md     # the environment it runs in
 ```
 
-**Status:** v0.1 draft. `init`, `check`, `deploy` and `run` work.
+**Status:** v0.1 draft.
 
 ## Philosophy
 
@@ -20,35 +20,6 @@ my-agent/
 
 ```sh
 npm install -g @soft-boy/agentschema
-```
-
-## Example
-
-[`examples/coding-agent/agent.md`](examples/coding-agent/agent.md):
-
-```markdown
----
-name: Coding Assistant
-model: claude-opus-5-5
-tools:
-  - type: agent_toolset_20260401
----
-
-You are a helpful coding assistant. Write clean, well-documented code.
-```
-
-[`examples/coding-agent/env.md`](examples/coding-agent/env.md):
-
-```markdown
----
-name: quickstart
-config:
-  type: cloud
-  networking:
-    type: limited
-    allow_package_managers: true
----
-Cloud container with limited networking and package manager access.
 ```
 
 ## Specification
@@ -109,8 +80,6 @@ Unknown fields are only warnings, because they're sent to the API as written. `c
 - **The files are the source of truth.** A field you delete from a file is cleared on the next deploy, rather than left at its old value.
 - **Changes made elsewhere aren't overwritten silently.** If the agent was changed outside the folder since the last deploy, `deploy` stops; `--force` overwrites it.
 
-`deploy` authenticates with `ANTHROPIC_API_KEY`, or with a profile from `ant auth login`.
-
 `claude-lock.json` uses the same layout as `ant apply`'s, so `deploy` updates resources that `ant apply` created. The two tools hash files differently, though, so the first `deploy` after an `ant apply` updates both resources even if nothing changed.
 
 **`run`** starts a session on the agent and environment in `claude-lock.json`, then opens a chat in the terminal. Deploy first; if you've edited the files since, `run` warns you and still uses the deployed version.
@@ -127,6 +96,21 @@ agentschema run --session sesn_…           # resume an existing session
 ```
 
 To run the agent from your own code, create a session with the agent and environment IDs from the lock file.
+
+### Authentication
+
+agentschema has no account setting of its own. `deploy` and `run` use whichever Anthropic credentials are in your shell:
+
+1. `ANTHROPIC_API_KEY`, if it's set
+2. otherwise, the profile you signed in to with `ant auth login` (the active one, or the one `ANTHROPIC_PROFILE` names)
+
+An API key belongs to one workspace, and the agent and environment are created in that workspace. Each person deploys with their own key, and to deploy somewhere else you switch the key:
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-… agentschema deploy my-agent
+```
+
+`claude-lock.json` holds the IDs from one workspace. A committed lock works for everyone whose key is in that workspace, and they all update the same agent. If you deploy the folder from a key in a different workspace, `deploy` can't find those IDs and stops. In that case, deploy from a copy of the folder, or don't commit that lock file.
 
 ## Development
 

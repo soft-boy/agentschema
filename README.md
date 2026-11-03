@@ -31,17 +31,17 @@ npm install -g @soft-boy/agentschema
 
 ### Files
 
-An instance is a folder of Markdown files. `agent.md` and `env.md` are required; `tools/` is optional.
+An instance is a folder of Markdown files. `agent.md` and `env.md` are required.
 
 ```
 my-agent/
 ├── agent.md        # the agent
-├── env.md          # the environment it runs in
-└── tools/          # one file per tool, in any folders you like
+├── env.md          # the environment (computer)
+└── tools/          # one file per tool, nested however you like
     ├── built-in/
     │   ├── bash.md
     │   └── read.md
-    └── read_file.md
+    └── get_weather.md
 ```
 
 ### `agent.md`

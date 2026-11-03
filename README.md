@@ -90,7 +90,6 @@ Unknown fields are only warnings, because they're sent to the API as written. `c
 - **Resuming:** quitting leaves the session in place, and `run` prints a command to resume it: `agentschema run --session sesn_…`.
 
 ```sh
-agentschema run [dir] --vault vlt_…        # attach a vault for MCP or other credentials (repeatable)
 agentschema run [dir] --title "Bug triage" # name the session
 agentschema run --session sesn_…           # resume an existing session
 ```

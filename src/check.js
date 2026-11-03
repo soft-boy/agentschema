@@ -27,7 +27,7 @@ export function check(dir) {
   for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env]]) {
     if (!parsed) continue;
     for (const [pattern, what] of SECRET_PATTERNS) {
-      if (pattern.test(parsed.raw)) errors.push(`${file}: looks like it contains ${what}; keep secrets in a vault`);
+      if (pattern.test(parsed.raw)) errors.push(`${file}: looks like it contains ${what}; keep secrets out of these files`);
     }
   }
 

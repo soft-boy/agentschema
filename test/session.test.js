@@ -156,11 +156,10 @@ test("openSession pins the deployed agent version and warns about undeployed edi
   writeFileSync(join(dir, "agent.md"), AGENT_MD.replace("helpful", "careful"));
 
   const api = fakeSessions(() => {});
-  const { session, notes } = await openSession(dir, { client: api.client, vaultIds: ["vlt_1"] });
+  const { session, notes } = await openSession(dir, { client: api.client });
   assert.deepEqual(session.params, {
     agent: { type: "agent", id: "agent_2", version: 1 },
     environment_id: "env_1",
-    vault_ids: ["vlt_1"],
     title: "Coding Assistant (agentschema run)",
   });
   assert.match(notes[0], /agent\.md has changed since the last deploy/);

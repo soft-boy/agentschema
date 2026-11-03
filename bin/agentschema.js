@@ -20,7 +20,6 @@ Options:
   -y, --yes         (init) Skip the questions and use the defaults
   --dry-run         (deploy) Show what would be created or updated, change nothing
   --force           (deploy) Update the agent even if it was changed outside this folder
-  --vault <id>      (run) Attach a vault (vlt_...) for MCP and other credentials; repeatable
   --title <title>   (run) Title for the new session
   --session <id>    (run) Resume an existing session (sesn_...) instead of starting one
   -h, --help        Show this help
@@ -33,7 +32,6 @@ const OPTIONS = {
   yes: { type: "boolean", short: "y" },
   "dry-run": { type: "boolean" },
   force: { type: "boolean" },
-  vault: { type: "string", multiple: true },
   title: { type: "string" },
   session: { type: "string" },
   help: { type: "boolean", short: "h" },
@@ -43,7 +41,7 @@ const COMMAND_OPTIONS = {
   init: ["yes"],
   check: [],
   deploy: ["dry-run", "force"],
-  run: ["vault", "title", "session"],
+  run: ["title", "session"],
 };
 
 async function main(argv) {
@@ -119,7 +117,6 @@ async function main(argv) {
       const { session, notes } = await openSession(dir, {
         client,
         sessionId: values.session,
-        vaultIds: values.vault ?? [],
         title: values.title,
       });
       for (const note of notes) console.warn(`warning: ${note}`);

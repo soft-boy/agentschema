@@ -1,5 +1,6 @@
 ---
 name: Coding Assistant
+description: a coding assistant AI-agent
 model: claude-opus-5-5
 tools:
   - type: agent_toolset_20260401

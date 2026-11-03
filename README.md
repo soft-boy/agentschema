@@ -10,7 +10,7 @@ my-agent/
     ├── built-in/
     │   ├── bash.md
     │   └── read.md
-    └── read_file.md
+    └── get_weather.md
 ```
 
 **Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
@@ -78,32 +78,25 @@ Only the pre-built tools that have a file are enabled; delete a file to disable 
 ````markdown
 ---
 type: custom
-name: read_file
-description: Read a file and output its contents as a string.
+name: get_weather
+description: Get the current weather for a city.
 ---
 
 ## Input Schema
 
 | Name | Type | Description | Required |
 |---|---|---|---|
-| `filePath` | `string` | The path of the file to read | `true` |
+| `city` | `string` | City name | `true` |
 
 ## Code
 
 ```javascript
-const fs = require('fs').promises;
-
-module.exports = async ({ filePath }) => {
-  try {
-    return await fs.readFile(filePath, 'utf-8');
-  } catch (error) {
-    return `Error reading file: ${error.message}`;
-  }
-};
+module.exports = ({ city }) =>
+  fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`).then((r) => r.text());
 ```
 ````
 
-- **Frontmatter:** `type: custom`, a `name` that matches the file name, and a `description` the model reads to decide when to call the tool. The name can't reuse a pre-built tool's name (so `read_file`, not `read`), because the API rejects that.
+- **Frontmatter:** `type: custom`, a `name` that matches the file name, and a `description` the model reads to decide when to call the tool. The name can't reuse a pre-built tool's name (so `read_file` works, but not `read`), because the API rejects that.
 - **`## Input Schema`** is a table with the columns Name, Type, Description and Required. Type is `string`, `number`, `integer`, `boolean`, `object` or `array`, or one of those followed by `[]` for a list. Leave the section out for a tool that takes no input.
 - **`## Code`** is required, and must be one JavaScript code block. It's a CommonJS module, and `module.exports` is the function. It's called with the call's input as an object. A string it returns (or resolves to) is sent as the result; anything else is sent as JSON. If it throws, the error message is sent as an error result. `require()` resolves from the tool's file, so packages installed in the agent folder work.
 - Other sections are notes for people.

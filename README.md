@@ -8,7 +8,7 @@ my-agent/
 └── env.md     # the environment it runs in
 ```
 
-**Status:** v0.1 draft. `check`, `deploy` and `run` work.
+**Status:** v0.1 draft. `init`, `check`, `deploy` and `run` work.
 
 ## Philosophy
 
@@ -79,12 +79,21 @@ Field reference: [Environments](https://platform.claude.com/docs/en/managed-agen
 ## Usage
 
 ```sh
+agentschema init <name>               # scaffold a new agent folder
 agentschema check [dir]               # validate the folder, no network
 agentschema deploy [dir]              # create or update the agent and environment
 agentschema run [dir]                 # chat with the deployed agent in the terminal
 ```
 
 `dir` defaults to the current directory.
+
+**`init`** creates the folder `<name>` with an `agent.md` and an `env.md` that pass `check`. It asks for:
+- the agent's name and model
+- its system prompt
+- whether it gets the built-in tools, and how tool calls are approved (`auto`, `always_allow` or `always_ask`)
+- the environment's name and networking
+
+Press Enter to keep the default shown, or pass `--yes` to skip the questions. `init` won't write into a folder that already has files in it.
 
 **`check`** reads both files and reports every problem it finds:
 - a missing file, or a name that isn't lowercase

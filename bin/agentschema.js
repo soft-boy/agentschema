@@ -5,16 +5,19 @@ import Anthropic from "@anthropic-ai/sdk";
 import { chat } from "../src/chat.js";
 import { check } from "../src/check.js";
 import { DeployError, deploy } from "../src/deploy.js";
+import { InitError, init } from "../src/init.js";
 import { SessionError, openSession } from "../src/session.js";
 
 const USAGE = `Usage: agentschema <command> [dir] [options]
 
 Commands:
+  init <name>     Scaffold a new agent folder, asking a few questions
   check [dir]     Validate agent.md and env.md, without calling the API
   deploy [dir]    Create or update the agent and environment, and write claude-lock.json
   run [dir]       Chat with the deployed agent in a new session
 
 Options:
+  -y, --yes         (init) Skip the questions and use the defaults
   --dry-run         (deploy) Show what would be created or updated, change nothing
   --force           (deploy) Update the agent even if it was changed outside this folder
   --vault <id>      (run) Attach a vault (vlt_...) for MCP and other credentials; repeatable
@@ -27,6 +30,7 @@ dir defaults to the current directory. deploy and run authenticate with
 ANTHROPIC_API_KEY, or with a profile from \`ant auth login\`.`;
 
 const OPTIONS = {
+  yes: { type: "boolean", short: "y" },
   "dry-run": { type: "boolean" },
   force: { type: "boolean" },
   vault: { type: "string", multiple: true },
@@ -36,6 +40,7 @@ const OPTIONS = {
   version: { type: "boolean", short: "v" },
 };
 const COMMAND_OPTIONS = {
+  init: ["yes"],
   check: [],
   deploy: ["dry-run", "force"],
   run: ["vault", "title", "session"],
@@ -70,6 +75,21 @@ async function main(argv) {
     const arg = extra[0] ?? `--${misplaced[0]}`;
     console.error(`agentschema: unexpected argument ${arg} for ${command}\n\n${USAGE}`);
     return 1;
+  }
+
+  if (command === "init") {
+    if (positionals.length < 2) {
+      console.error(`agentschema: init needs a folder name, e.g. agentschema init my-agent`);
+      return 1;
+    }
+    try {
+      await init(dir, { yes: values.yes ?? false });
+      return 0;
+    } catch (err) {
+      if (!(err instanceof InitError)) throw err;
+      console.error(`error: ${err.message}`);
+      return 1;
+    }
   }
 
   if (command === "check") {

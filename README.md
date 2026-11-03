@@ -87,11 +87,10 @@ Unknown fields are only warnings, because they're sent to the API as written. `c
 - **Approvals:** when a tool call needs approval (`always_ask`, or `auto` when the server can't decide), `run` asks you. Answer `y` to allow it, or type a reason to deny it; the agent sees the reason.
 - **Custom tools:** `run` shows the call's input and asks you to type the result.
 - **Interrupting:** Ctrl+C interrupts the agent mid-turn, and a second Ctrl+C quits. Ctrl+D quits at the prompt.
-- **Resuming:** quitting leaves the session in place, and `run` prints a command to resume it: `agentschema run --session sesn_…`.
+- **Resuming:** quitting leaves the session in place, and `run` prints a command to resume it: `agentschema run --resume sesn_…`.
 
 ```sh
-agentschema run [dir] --title "Bug triage" # name the session
-agentschema run --session sesn_…           # resume an existing session
+agentschema run --resume sesn_…   # resume an existing session
 ```
 
 To run the agent from your own code, create a session with the agent and environment IDs from the lock file.

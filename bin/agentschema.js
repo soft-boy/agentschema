@@ -20,8 +20,7 @@ Options:
   -y, --yes         (init) Skip the questions and use the defaults
   --dry-run         (deploy) Show what would be created or updated, change nothing
   --force           (deploy) Update the agent even if it was changed outside this folder
-  --title <title>   (run) Title for the new session
-  --session <id>    (run) Resume an existing session (sesn_...) instead of starting one
+  --resume <id>     (run) Resume an existing session (sesn_...) instead of starting one
   -h, --help        Show this help
   -v, --version     Show the version
 
@@ -32,8 +31,7 @@ const OPTIONS = {
   yes: { type: "boolean", short: "y" },
   "dry-run": { type: "boolean" },
   force: { type: "boolean" },
-  title: { type: "string" },
-  session: { type: "string" },
+  resume: { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "v" },
 };
@@ -41,7 +39,7 @@ const COMMAND_OPTIONS = {
   init: ["yes"],
   check: [],
   deploy: ["dry-run", "force"],
-  run: ["title", "session"],
+  run: ["resume"],
 };
 
 async function main(argv) {
@@ -116,8 +114,7 @@ async function main(argv) {
       const client = makeClient(false);
       const { session, notes } = await openSession(dir, {
         client,
-        sessionId: values.session,
-        title: values.title,
+        sessionId: values.resume,
       });
       for (const note of notes) console.warn(`warning: ${note}`);
       await chat(client, session, { agentName: session.agent?.name ?? "agent" });

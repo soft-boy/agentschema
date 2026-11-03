@@ -190,7 +190,7 @@ test("chat reads lines, prints replies, and quits at end of input", async () => 
   assert.match(printed, /· bash ls/);
   assert.match(printed, /Allow bash\?/);
   assert.match(printed, /tool allow/);
-  assert.match(printed, /agentschema run --session sesn_1/);
+  assert.match(printed, /agentschema run --resume sesn_1/);
 });
 
 function deployClient() {

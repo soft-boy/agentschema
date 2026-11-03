@@ -131,5 +131,5 @@ export async function chat(client, session, { agentName, input = process.stdin, 
     conversation.close();
     rl.close();
   }
-  if (!ended) output.write(dim(`Resume this conversation with: agentschema run --session ${session.id}\n`));
+  if (!ended) output.write(dim(`Resume this conversation with: agentschema run --resume ${session.id}\n`));
 }

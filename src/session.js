@@ -6,7 +6,7 @@ export class SessionError extends Error {}
 
 // Starts a session on the agent and environment recorded in claude-lock.json, or resumes `sessionId`.
 // Returns { session, notes }: notes are warnings worth showing, such as files changed since the last deploy.
-export async function openSession(dir, { client, sessionId, title }) {
+export async function openSession(dir, { client, sessionId }) {
   if (sessionId) {
     const session = await client.beta.sessions.retrieve(sessionId);
     if (session.status === "terminated") throw new SessionError(`session ${sessionId} has terminated`);
@@ -34,7 +34,7 @@ export async function openSession(dir, { client, sessionId, title }) {
     environment_id: env.id,
   };
   const name = instance?.agent.data.name;
-  params.title = title ?? (name ? `${name} (agentschema run)` : "agentschema run");
+  params.title = name ? `${name} (agentschema run)` : "agentschema run";
   return { session: await client.beta.sessions.create(params), notes };
 }
 

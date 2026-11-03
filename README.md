@@ -54,6 +54,10 @@ agentschema init <name>               # scaffold a new agent folder
 agentschema check [dir]               # validate the folder, no network
 agentschema deploy [dir]              # create or update the agent and environment
 agentschema run [dir]                 # chat with the deployed agent in the terminal
+agentschema list                      # list the agents in your workspace
+agentschema delete <agent_id>         # archive an agent
+agentschema sessions list             # list the sessions in your workspace
+agentschema sessions delete <id>      # delete a session
 ```
 
 `dir` defaults to the current directory.
@@ -95,9 +99,19 @@ agentschema run --resume sesn_…   # resume an existing session
 
 To run the agent from your own code, create a session with the agent and environment IDs from the lock file.
 
+**`list`** prints every agent in your workspace, with its ID, latest version, model and when it was last updated. It includes agents that weren't deployed with agentschema, and leaves out archived ones.
+
+**`sessions list`** prints every session in your workspace, newest first, with its status, the agent and version it runs, and its title. Pass an ID to `run --resume` to pick a session back up.
+
+**`delete`** archives an agent. The API can't delete agents outright, so this is as close as it gets. An archived agent drops out of `list`, and the API has no way to unarchive it. If the agent is in a folder's `claude-lock.json`, remove its entry so the next `deploy` creates a new one.
+
+**`sessions delete`** permanently deletes a session and its event history. A running session can't be deleted; wait for it to go idle, or interrupt it, first.
+
+Both ask for confirmation first, showing the agent's name or the session's title. Pass `--yes` to skip that, for example in scripts; without a terminal to ask in, they refuse unless you pass `--yes`.
+
 ### Authentication
 
-agentschema has no account setting of its own. `deploy` and `run` use whichever Anthropic credentials are in your shell:
+agentschema has no account setting of its own. Every command except `init` and `check` uses whichever Anthropic credentials are in your shell:
 
 1. `ANTHROPIC_API_KEY`, if it's set
 2. otherwise, the profile you signed in to with `ant auth login` (the active one, or the one `ANTHROPIC_PROFILE` names)

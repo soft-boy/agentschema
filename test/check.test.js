@@ -7,26 +7,28 @@ import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const errorsFor = (files) => check(instance(files)).errors;
 
-test("the coding-agent example is valid", () => {
-  const dir = fileURLToPath(new URL("../examples/coding-agent", import.meta.url));
-  const { errors, warnings } = check(dir);
-  assert.deepEqual(errors, []);
-  assert.deepEqual(warnings, []);
-});
+for (const example of ["calendar-agent", "coding-agent", "weather-agent"]) {
+  test(`the ${example} example is valid`, () => {
+    const dir = fileURLToPath(new URL(`../examples/${example}`, import.meta.url));
+    const { errors, warnings } = check(dir);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(warnings, []);
+  });
+}
 
 test("the body becomes the system prompt", () => {
   const { instance: inst } = check(instance());
-  assert.deepEqual(agentBody(inst.agent), {
+  assert.deepEqual(agentBody(inst), {
     name: "Coding Assistant",
     model: "claude-opus-5-5",
-    tools: [{ type: "agent_toolset_20260401" }],
+    tools: [{ type: "agent_toolset_20260401", default_config: { enabled: false }, configs: [{ name: "bash", enabled: true }] }],
     system: "You are a helpful coding assistant.",
   });
 });
 
 test("an empty body sends no system prompt", () => {
   const { instance: inst } = check(instance({ "agent.md": "---\nname: a\nmodel: m\n---\n", "env.md": ENV_MD }));
-  assert.equal("system" in agentBody(inst.agent), false);
+  assert.equal("system" in agentBody(inst), false);
 });
 
 test("both files are required, with lowercase names", () => {

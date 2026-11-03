@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { createInterface, emitKeypressEvents } from "node:readline";
 import { stringify } from "yaml";
 import { AGENT_FILE, ENV_FILE } from "./instance.js";
+import { BUILT_IN_DIR, PREBUILT_TOOLS, TOOLSET, TOOLS_DIR } from "./tools.js";
 
 export class InitError extends Error {}
 
 export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
-export const APPROVALS = ["auto", "always_allow", "always_ask"];
 export const NETWORKING = ["limited", "unrestricted"];
 
 // The answers used when a question is skipped (--yes, or input ends early).
@@ -18,22 +18,16 @@ export function defaults(dir) {
     model: MODELS[0],
     system: "You are a helpful assistant.",
     tools: true,
-    approval: "auto",
     environment: slug,
     networking: "limited",
     packageManagers: true,
   };
 }
 
-// Returns { "agent.md": text, "env.md": text } for a set of answers.
+// Returns { path: text } for a set of answers: agent.md, env.md, and a tools/built-in/ file
+// for each pre-built tool when the agent gets them.
 export function scaffold(answers) {
   const agent = { name: answers.name, model: answers.model };
-  if (answers.tools) {
-    const toolset = { type: "agent_toolset_20260401" };
-    // always_allow is the toolset's default, so it needs no config.
-    if (answers.approval !== "always_allow") toolset.default_config = { permission_policy: { type: answers.approval } };
-    agent.tools = [toolset];
-  }
 
   const networking = { type: answers.networking };
   if (answers.networking === "limited") networking.allow_package_managers = answers.packageManagers;
@@ -42,10 +36,14 @@ export function scaffold(answers) {
   const access = answers.networking === "unrestricted"
     ? "unrestricted network access"
     : answers.packageManagers ? "limited networking and package manager access" : "limited networking";
-  return {
+  const files = {
     [AGENT_FILE]: `---\n${stringify(agent)}---\n\n${answers.system.trim()}\n`,
     [ENV_FILE]: `---\n${stringify(env)}---\nCloud container with ${access}.\n`,
   };
+  if (answers.tools) {
+    for (const name of PREBUILT_TOOLS) files[`${TOOLS_DIR}/${BUILT_IN_DIR}/${name}.md`] = `---\ntype: ${TOOLSET}\n---\n`;
+  }
+  return files;
 }
 
 // Asks the setup questions, then writes agent.md and env.md into a new folder `dir`.
@@ -57,11 +55,14 @@ export async function init(dir, { yes = false, input = process.stdin, output = p
   const answers = defaults(dir);
   if (!yes) await ask(answers, input, output);
 
-  mkdirSync(dir, { recursive: true });
   const files = scaffold(answers);
-  for (const [file, text] of Object.entries(files)) writeFileSync(resolve(dir, file), text);
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(dirname(resolve(dir, file)), { recursive: true });
+    writeFileSync(resolve(dir, file), text);
+  }
 
-  output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${ENV_FILE}.\n\nNext:\n`);
+  const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${BUILT_IN_DIR}/ with the pre-built tools (delete a file to disable that tool)` : "";
+  output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${ENV_FILE}${tools}.\n\nNext:\n`);
   output.write(`  agentschema deploy ${dir}\n  agentschema run ${dir}\n`);
   return files;
 }
@@ -83,7 +84,6 @@ async function ask(answers, input, output) {
     answers.model = await io.select("Model?", MODELS, answers.model);
     answers.system = await io.text("System prompt?", answers.system);
     answers.tools = await confirm("Give it the built-in tools (bash, files, web)?", answers.tools);
-    if (answers.tools) answers.approval = await io.select("Tool approvals?", APPROVALS, answers.approval);
     answers.environment = await io.text("Environment name?", answers.environment);
     answers.networking = await io.select("Networking?", NETWORKING, answers.networking);
     if (answers.networking === "limited") {

@@ -129,6 +129,19 @@ test("a custom tool call gets the result the user types", async () => {
   });
 });
 
+test("a custom tool's error result is sent with is_error", async () => {
+  const api = fakeSessions((e, emit) => {
+    if (e.type === "user.message") {
+      emit({ id: "sevt_err", type: "agent.custom_tool_use", name: "read_file", input: {} });
+      emit(idle("requires_action"));
+    }
+    if (e.type === "user.custom_tool_result") emit(idle());
+  });
+  const ui = quietUI({ customToolResult: async () => ({ text: "Error: no such file", isError: true }) });
+  await new Conversation(api.client, "sesn_1", ui).send("read it");
+  assert.equal(api.sent[1].is_error, true);
+});
+
 test("a dropped stream reconnects without losing or repeating events", async () => {
   const api = fakeSessions((e, emit) => {
     if (e.type === "user.message") {
@@ -162,7 +175,7 @@ test("openSession pins the deployed agent version and warns about undeployed edi
     environment_id: "env_1",
     title: "Coding Assistant (agentschema run)",
   });
-  assert.match(notes[0], /agent\.md has changed since the last deploy/);
+  assert.match(notes[0], /agent\.md or tools\/ has changed since the last deploy/);
 });
 
 test("openSession needs a deploy first", async () => {

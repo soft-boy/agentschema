@@ -1,6 +1,7 @@
 import { check } from "./check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
 import { LOCK_FILE, hashBody, readLock } from "./lock.js";
+import { TOOLS_DIR } from "./tools.js";
 
 export class SessionError extends Error {}
 
@@ -21,10 +22,10 @@ export async function openSession(dir, { client, sessionId }) {
   }
 
   const notes = [];
-  const { instance } = check(dir);
-  if (instance) {
-    if (hashBody(agentBody(instance.agent)) !== agent.hash) notes.push(`${AGENT_FILE} has changed since the last deploy`);
-    if (hashBody(envBody(instance.env)) !== env.hash) notes.push(`${ENV_FILE} has changed since the last deploy`);
+  const { instance, errors } = check(dir);
+  if (instance && errors.length === 0) {
+    if (hashBody(agentBody(instance)) !== agent.hash) notes.push(`${AGENT_FILE} or ${TOOLS_DIR}/ has changed since the last deploy`);
+    if (hashBody(envBody(instance)) !== env.hash) notes.push(`${ENV_FILE} has changed since the last deploy`);
     if (notes.length > 0) notes.push(`this session uses the deployed version; run agentschema deploy to pick up the changes`);
   }
 
@@ -41,7 +42,7 @@ export async function openSession(dir, { client, sessionId }) {
 // Drives a session one turn at a time. `ui` answers what only a person can:
 //   ui.event(event)          show an event
 //   ui.confirm(event)        -> { result: "allow" | "deny", deny_message? } for a paused tool call
-//   ui.customToolResult(event) -> string, the result of a custom tool call
+//   ui.customToolResult(event) -> string, or { text, isError }: the result of a custom tool call
 export class Conversation {
   constructor(client, sessionId, ui) {
     this.client = client;
@@ -108,8 +109,11 @@ export class Conversation {
         }
         return null;
       case "agent.custom_tool_use": {
-        const text = await this.ui.customToolResult(event);
-        await send({ type: "user.custom_tool_result", custom_tool_use_id: event.id, content: [{ type: "text", text }] });
+        const result = await this.ui.customToolResult(event);
+        const { text, isError } = typeof result === "string" ? { text: result } : result;
+        const reply = { type: "user.custom_tool_result", custom_tool_use_id: event.id, content: [{ type: "text", text }] };
+        if (isError) reply.is_error = true;
+        await send(reply);
         return null;
       }
       case "session.status_idle":

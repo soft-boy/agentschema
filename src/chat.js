@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { Conversation } from "./session.js";
+import { loadTool } from "./tools.js";
 
 const color = (code) => (text) => (process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text);
 const dim = color(2);
@@ -53,8 +54,20 @@ function firstLine(content = []) {
 
 const truncate = (s, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+// Runs a custom tool's code with the call's input. A thrown error is returned as an error
+// result, so the agent sees what went wrong.
+export async function runTool(tool, input) {
+  try {
+    const value = await loadTool(tool)(input);
+    return { text: typeof value === "string" ? value : (JSON.stringify(value) ?? "") };
+  } catch (err) {
+    return { text: `Error: ${err?.message ?? err}`, isError: true };
+  }
+}
+
 // Runs an interactive chat in the terminal until the user quits or the session ends.
-export async function chat(client, session, { agentName, input = process.stdin, output = process.stdout }) {
+// `tools` maps custom tool names to their tools/ files; their code runs here when called.
+export async function chat(client, session, { agentName, tools = {}, input = process.stdin, output = process.stdout }) {
   const rl = createInterface({ input, output, terminal: input.isTTY });
   const lines = rl[Symbol.asyncIterator]();
   let running = false;
@@ -80,6 +93,11 @@ export async function chat(client, session, { agentName, input = process.stdin, 
       return { result: "deny", deny_message: reason && !/^(n|no)$/i.test(reason) ? reason : undefined };
     },
     async customToolResult(event) {
+      if (tools[event.name]) {
+        const result = await runTool(tools[event.name], event.input);
+        if (result.isError) output.write(`${red(`  ↳ ${truncate(result.text.split("\n")[0])}`)}\n`);
+        return result;
+      }
       output.write(dim(`${event.name} is a custom tool, so you supply its result.\n`));
       output.write(dim(`input: ${JSON.stringify(event.input)}\n`));
       return (await ask(bold("result> "))) ?? "The user didn't provide a result.";

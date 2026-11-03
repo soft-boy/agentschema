@@ -21,8 +21,8 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
   }
 
   const steps = [
-    { file: ENV_FILE, kind: "environment", body: envBody(instance.env) },
-    { file: AGENT_FILE, kind: "agent", body: agentBody(instance.agent) },
+    { file: ENV_FILE, kind: "environment", body: envBody(instance) },
+    { file: AGENT_FILE, kind: "agent", body: agentBody(instance) },
   ];
   for (const step of steps) {
     step.key = `./${step.file}`;

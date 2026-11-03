@@ -4,17 +4,22 @@ Define an AI-Agent as a folder of Markdown files.
 
 ```
 my-agent/
-├── agent.md   # the agent
-└── env.md     # the environment it runs in
+├── agent.md        # the agent
+├── env.md          # the environment it runs in
+└── tools/          # one file per tool, in any folders you like
+    ├── built-in/
+    │   ├── bash.md
+    │   └── read.md
+    └── read_file.md
 ```
 
-**Status:** v0.1 draft.
+**Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
 
 ## Philosophy
 
 1. **One folder, one agent.** A folder defines one agent and the one environment it runs in. Sessions, credentials, mounted files and repositories, and schedules are supplied by whatever runs the agent.
 2. **Everything is a Markdown file.** An agent is plain files you can read, diff, review and version like any other code. Structured settings go in YAML frontmatter, and prose the model reads goes in the Markdown body.
-3. **Inspired by Claude Managed Agents, not tied to it.** The fields follow the Claude Managed Agents schema because it's a well-documented vocabulary for agents. The format itself assumes no particular infrastructure, so any runtime that can read the files can run the agent.
+3. **Inspired by Claude Managed Agents, not tied to it.** `agent.md` and `env.md` use the Claude Managed Agents fields because they're a well-documented vocabulary for agents. Tools are the exception: each one is its own file, and agentschema compiles them into the API's format. The format itself assumes no particular infrastructure, so any runtime that can read the files can run the agent.
 
 ## Install
 
@@ -26,26 +31,84 @@ npm install -g @soft-boy/agentschema
 
 ### Files
 
-An instance is a folder of Markdown files.
+An instance is a folder of Markdown files. `agent.md` and `env.md` are required; `tools/` is optional.
 
 ```
 my-agent/
-├── agent.md   # the agent
-└── env.md     # the environment it runs in
+├── agent.md        # the agent
+├── env.md          # the environment it runs in
+└── tools/          # one file per tool, in any folders you like
+    ├── built-in/
+    │   ├── bash.md
+    │   └── read.md
+    └── read_file.md
 ```
 
 ### `agent.md`
 Field reference: [Agent setup](https://platform.claude.com/docs/en/managed-agents/agent-setup).
 
-- **Frontmatter** uses the fields of a Claude Managed Agents agent (the `POST /v1/agents` request body), written as YAML. `name` and `model` are required. Every other field (`description`, `tools`, `mcp_servers`, `skills`, `multiagent`, `metadata`, …) is optional and uses the same names and shapes.
+- **Frontmatter** uses the fields of a Claude Managed Agents agent (the `POST /v1/agents` request body), written as YAML. `name` and `model` are required. Every other field (`description`, `mcp_servers`, `skills`, `multiagent`, `metadata`, …) is optional and uses the same names and shapes.
 - **Body** is the agent's system prompt, sent as `system` exactly as written (leading and trailing whitespace trimmed). An empty body means no system prompt.
-- Setting `system` in the frontmatter is an error, because the body is the system prompt.
+- Setting `system` in the frontmatter is an error, because the body is the system prompt. So is `tools`, because tools live in `tools/`.
 
 ### `env.md`
 Field reference: [Environments](https://platform.claude.com/docs/en/managed-agents/environments).
 
 - **Frontmatter** uses the fields of a Claude Managed Agents environment (the `POST /v1/environments` request body), written as YAML: `name`, `config`, and any other field the schema defines. 
 - **Body** is a note for people reading the folder. It is not sent anywhere.
+
+### `tools/`
+
+Each `.md` file in `tools/` is one tool, and the file name is the tool's name. agentschema supports two kinds: pre-built and custom.
+
+Subfolders are only for organizing. Every `.md` file under `tools/`, at any depth, is a tool, and its folder is ignored when compiling: moving a file between folders changes nothing that's deployed. Because the folders are dropped, two tools can't share a name even in different folders. Folders and files whose names start with `.` are skipped. By convention, the pre-built tools go in `tools/built-in/`.
+
+**Pre-built tools** are the tools Claude Managed Agents runs in the container: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search` and `write`. Name the file after the tool (for example `tools/built-in/bash.md`), and give it only a `type`:
+
+```markdown
+---
+type: agent_toolset_20260401
+---
+```
+
+Only the pre-built tools that have a file are enabled; delete a file to disable that tool. The body is a note for people and isn't sent anywhere.
+
+**Custom tools** run on your side: when the agent calls one, `agentschema run` runs its code on your machine and sends back the result.
+
+````markdown
+---
+type: custom
+name: read_file
+description: Read a file and output its contents as a string.
+---
+
+## Input Schema
+
+| Name | Type | Description | Required |
+|---|---|---|---|
+| `filePath` | `string` | The path of the file to read | `true` |
+
+## Code
+
+```javascript
+const fs = require('fs').promises;
+
+module.exports = async ({ filePath }) => {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    return `Error reading file: ${error.message}`;
+  }
+};
+```
+````
+
+- **Frontmatter:** `type: custom`, a `name` that matches the file name, and a `description` the model reads to decide when to call the tool. The name can't reuse a pre-built tool's name (so `read_file`, not `read`), because the API rejects that.
+- **`## Input Schema`** is a table with the columns Name, Type, Description and Required. Type is `string`, `number`, `integer`, `boolean`, `object` or `array`, or one of those followed by `[]` for a list. Leave the section out for a tool that takes no input.
+- **`## Code`** is required, and must be one JavaScript code block. It's a CommonJS module, and `module.exports` is the function. It's called with the call's input as an object. A string it returns (or resolves to) is sent as the result; anything else is sent as JSON. If it throws, the error message is sent as an error result. `require()` resolves from the tool's file, so packages installed in the agent folder work.
+- Other sections are notes for people.
+
+**Compiling.** `deploy` turns `tools/` into the agent's `tools` list, sorted by tool name: one `agent_toolset_20260401` entry with `default_config: { enabled: false }` and a config enabling each pre-built tool with a file, then the custom tools. A custom tool sends only its name, description and input schema; the code never leaves your machine.
 
 ## Usage
 
@@ -65,22 +128,23 @@ agentschema sessions delete <id>      # delete a session
 **`init`** creates the folder `<name>` with an `agent.md` and an `env.md` that pass `check`. It asks for:
 - the agent's name and model
 - its system prompt
-- whether it gets the built-in tools, and how tool calls are approved (`auto`, `always_allow` or `always_ask`)
+- whether it gets the pre-built tools; if so, `init` writes a file for each one in `tools/built-in/`
 - the environment's name and networking
 
 Press Enter to keep the default shown, or pass `--yes` to skip the questions. `init` won't write into a folder that already has files in it.
 
-**`check`** reads both files and reports every problem it finds:
+**`check`** reads every file and reports every problem it finds:
 - a missing file, or a name that isn't lowercase
 - frontmatter that is missing, unclosed, or invalid YAML
-- a missing `name` or `model`, or a `system` key in `agent.md`'s frontmatter
+- a missing `name` or `model`, or a `system` or `tools` key in `agent.md`'s frontmatter
+- a tool file that isn't a known pre-built tool, or a custom tool with a missing description, a malformed input table, or code that isn't JavaScript or doesn't parse
 - values over the API's limits
 - anything that looks like an API key or token
 
 Unknown fields are only warnings, because they're sent to the API as written. `check` exits with status 1 when there are errors.
 
 **`deploy`** runs `check` first, then creates or updates the environment and the agent, and records their IDs in `claude-lock.json` in the folder. Commit that file.
-- **Later runs update the same resources.** A file that hasn't changed since the last deploy is skipped. Each change to `agent.md` adds a new version of the agent, and sessions already running keep the version they started on.
+- **Later runs update the same resources.** A file that hasn't changed since the last deploy is skipped. Each change to `agent.md` or `tools/` adds a new version of the agent, and sessions already running keep the version they started on.
 - **The files are the source of truth.** A field you delete from a file is cleared on the next deploy, rather than left at its old value.
 - **Changes made elsewhere aren't overwritten silently.** If the agent was changed outside the folder since the last deploy, `deploy` stops; `--force` overwrites it.
 
@@ -89,7 +153,7 @@ Unknown fields are only warnings, because they're sent to the API as written. `c
 **`run`** starts a session on the agent and environment in `claude-lock.json`, then opens a chat in the terminal. Deploy first; if you've edited the files since, `run` warns you and still uses the deployed version.
 - **Messages:** type a message and press Enter. The agent's replies stream in, with a one-line summary of each tool call.
 - **Approvals:** when a tool call needs approval (`always_ask`, or `auto` when the server can't decide), `run` asks you. Answer `y` to allow it, or type a reason to deny it; the agent sees the reason.
-- **Custom tools:** `run` shows the call's input and asks you to type the result.
+- **Custom tools:** `run` runs the tool's code from `tools/` and sends back the result. The code runs on your machine with your permissions, like any script in the folder. If the folder doesn't pass `check`, or the tool isn't in it (for example, when you resume a session from somewhere else), `run` shows the call's input and asks you to type the result.
 - **Interrupting:** Ctrl+C interrupts the agent mid-turn, and a second Ctrl+C quits. Ctrl+D quits at the prompt.
 - **Resuming:** quitting leaves the session in place, and `run` prints a command to resume it: `agentschema run --resume sesn_…`.
 

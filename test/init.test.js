@@ -18,15 +18,16 @@ test("init --yes scaffolds a folder that passes check", async () => {
 
   const agent = readFileSync(join(dir, "agent.md"), "utf8");
   assert.match(agent, /^---\nname: Bug Triage\nmodel: claude-opus-5-5\n/);
-  assert.match(agent, /permission_policy:\n\s+type: auto/);
+  assert.doesNotMatch(agent, /tools/);
+  assert.equal(readFileSync(join(dir, "tools/built-in/bash.md"), "utf8"), "---\ntype: agent_toolset_20260401\n---\n");
   assert.match(readFileSync(join(dir, "env.md"), "utf8"), /name: bug-triage/);
 });
 
 test("init uses the answers typed, by name or number", async () => {
   const dir = join(parent(), "helper");
   const input = new PassThrough();
-  // name, model, system prompt, tools, approvals, environment, networking
-  input.end("Reviewer\n2\nYou review pull requests.\ny\nalways_ask\n\nunrestricted\n");
+  // name, model, system prompt, tools, environment, networking
+  input.end("Reviewer\n2\nYou review pull requests.\ny\n\nunrestricted\n");
   await init(dir, { input, output: silent() });
 
   const { errors, instance } = check(dir);
@@ -34,7 +35,7 @@ test("init uses the answers typed, by name or number", async () => {
   assert.equal(instance.agent.data.name, "Reviewer");
   assert.equal(instance.agent.data.model, "claude-sonnet-5-5");
   assert.equal(instance.agent.body, "You review pull requests.");
-  assert.equal(instance.agent.data.tools[0].default_config.permission_policy.type, "always_ask");
+  assert.equal(instance.tools.length, 8);
   assert.equal(instance.env.data.name, "helper");
   assert.deepEqual(instance.env.data.config.networking, { type: "unrestricted" });
 });
@@ -47,7 +48,7 @@ test("init re-asks on an invalid choice and keeps defaults when input ends", asy
 
   const { instance } = check(dir);
   assert.equal(instance.agent.data.model, "claude-haiku-5-5");
-  assert.equal(instance.agent.data.tools, undefined);
+  assert.equal(instance.tools.length, 0);
   assert.deepEqual(instance.env.data.config.networking, { type: "limited", allow_package_managers: true });
 });
 

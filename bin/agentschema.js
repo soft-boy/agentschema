@@ -153,7 +153,7 @@ async function main(argv) {
         sessionId: values.resume,
       });
       for (const note of notes) console.warn(`warning: ${note}`);
-      await chat(client, session, { agentName: session.agent?.name ?? "agent" });
+      await chat(client, session, { agentName: session.agent?.name ?? "agent", tools: customTools(dir) });
       return 0;
     }
   } catch (err) {
@@ -178,6 +178,19 @@ async function confirm(question) {
   } finally {
     rl.close();
   }
+}
+
+// The folder's custom tools, by name, for run to execute. A folder that doesn't pass check
+// runs none of them; run asks you for each result instead.
+function customTools(dir) {
+  const { instance, errors } = check(dir);
+  const customs = instance?.tools.filter((t) => t.data.type === "custom") ?? [];
+  if (customs.length === 0) return {};
+  if (errors.length > 0) {
+    console.warn(`warning: ${dir} doesn't pass check, so its custom tools won't run; you'll be asked for each result`);
+    return {};
+  }
+  return Object.fromEntries(customs.map((t) => [t.name, t]));
 }
 
 // A dry run makes no API calls, so it works without credentials.

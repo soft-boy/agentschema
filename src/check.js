@@ -1,7 +1,8 @@
 import { AGENT_FILE, ENV_FILE, readInstance } from "./instance.js";
+import { TOOLS_DIR, checkTools, readTools } from "./tools.js";
 
 const AGENT_FIELDS = new Set([
-  "name", "model", "description", "tools", "mcp_servers", "skills",
+  "name", "model", "description", "mcp_servers", "skills",
   "multiagent", "metadata", "execution_identity",
 ]);
 const ENV_FIELDS = new Set(["name", "config", "description", "metadata", "scope"]);
@@ -20,18 +21,21 @@ const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
 // Returns { errors, warnings, instance }; instance is null when the files can't be read.
 export function check(dir) {
   const { agent, env, errors } = readInstance(dir);
+  const { tools, errors: toolErrors } = readTools(dir);
+  errors.push(...toolErrors);
   const warnings = [];
 
   if (agent) checkAgent(agent, errors, warnings);
   if (env) checkEnv(env, errors, warnings);
-  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env]]) {
+  checkTools(tools, errors);
+  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env], ...tools.map((t) => [t.file, t])]) {
     if (!parsed) continue;
     for (const [pattern, what] of SECRET_PATTERNS) {
       if (pattern.test(parsed.raw)) errors.push(`${file}: looks like it contains ${what}; keep secrets out of these files`);
     }
   }
 
-  return { errors, warnings, instance: agent && env ? { agent, env } : null };
+  return { errors, warnings, instance: agent && env ? { agent, env, tools } : null };
 }
 
 function checkAgent({ data, body }, errors, warnings) {
@@ -53,7 +57,9 @@ function checkAgent({ data, body }, errors, warnings) {
     else if (data.description.length > 2048) err("`description` must be at most 2048 characters");
   }
 
-  for (const [field, max] of [["tools", 256], ["mcp_servers", 20], ["skills", 500]]) {
+  if ("tools" in data) err(`\`tools\` is not allowed in frontmatter; define each tool as a file in ${TOOLS_DIR}/`);
+
+  for (const [field, max] of [["mcp_servers", 20], ["skills", 500]]) {
     if (data[field] === undefined) continue;
     if (!Array.isArray(data[field])) err(`\`${field}\` must be a list`);
     else if (data[field].length > max) err(`\`${field}\` has ${data[field].length} entries; the limit is ${max}`);
@@ -62,7 +68,7 @@ function checkAgent({ data, body }, errors, warnings) {
   checkMetadata(data.metadata, 16, err);
 
   for (const key of Object.keys(data)) {
-    if (!AGENT_FIELDS.has(key) && key !== "system") {
+    if (!AGENT_FIELDS.has(key) && key !== "system" && key !== "tools") {
       warnings.push(`${AGENT_FILE}: unknown field \`${key}\` will be sent to the API as written`);
     }
   }

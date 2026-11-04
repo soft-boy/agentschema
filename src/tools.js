@@ -7,6 +7,7 @@ import { FileError, parseMarkdown } from "./markdown.js";
 export const TOOLS_DIR = "tools";
 export const TOOLSET = "agent_toolset_20260401";
 export const TOOLSET_FILE = `${TOOLSET}.md`;
+export const MCP_TOOLSET = "mcp_toolset";
 export const PREBUILT_TOOLS = ["bash", "edit", "glob", "grep", "read", "web_fetch", "web_search", "write"];
 export const POLICIES = ["always_allow", "always_ask", "auto"];
 const TYPES = ["string", "number", "integer", "boolean", "object", "array"];
@@ -38,8 +39,10 @@ export function readTools(dir) {
   }
 
   // Custom tool names must be unique across folders, since the folders are dropped.
-  for (const [name, same] of groupBy(tools.filter((t) => t.data.type === "custom"), (t) => t.name)) {
-    if (same.length > 1) errors.push(`${TOOLS_DIR}: more than one tool is named \`${name}\` (${same.map((t) => t.file).join(", ")})`);
+  for (const [type, what] of [["custom", "tool"], [MCP_TOOLSET, "MCP server"]]) {
+    for (const [name, same] of groupBy(tools.filter((t) => t.data.type === type), (t) => t.name)) {
+      if (same.length > 1) errors.push(`${TOOLS_DIR}: more than one ${what} is named \`${name}\` (${same.map((t) => t.file).join(", ")})`);
+    }
   }
   const toolsets = tools.filter((t) => t.data.type === TOOLSET);
   if (toolsets.length > 1) {
@@ -137,13 +140,41 @@ export function checkTools(tools, errors) {
     if (type === TOOLSET) {
       checkToolset(tool, err);
       extra(["type"]);
+    } else if (type === MCP_TOOLSET) {
+      checkMcpToolset(tool, err);
+      extra(["type", "mcp_server_name", "default_config", "url"]);
     } else if (type === "custom") {
       checkCustom(tool, err);
       extra(["type", "name", "description"]);
     } else {
-      err(`\`type\` must be \`${TOOLSET}\` (a pre-built tool) or \`custom\``);
+      err(`\`type\` must be \`${TOOLSET}\` (the pre-built tools), \`${MCP_TOOLSET}\` (an MCP server) or \`custom\``);
     }
   }
+}
+
+// The tools of an MCP server that agent.md declares: `mcp_server_name` is the server's name, and the
+// optional `## Tools` table configures tools by the names the server reports.
+function checkMcpToolset(tool, err) {
+  const { mcp_server_name: server, default_config: defaults } = tool.data;
+  if ("url" in tool.data) err("`url` belongs in agent.md's `mcp_servers`; refer to the server here with `mcp_server_name`");
+  if (typeof server !== "string" || server === "") err("`mcp_server_name` is required");
+  else if (server !== tool.name) err(`\`mcp_server_name\` must match the file name (${tool.name})`);
+  if (tool.name.length > 255) err("an MCP server's name (its file name) must be at most 255 characters");
+
+  if (defaults !== undefined && defaults !== null) {
+    if (typeof defaults !== "object" || Array.isArray(defaults)) err("`default_config` must be a mapping");
+    else {
+      if (defaults.enabled !== undefined && typeof defaults.enabled !== "boolean") err("`default_config.enabled` must be true or false");
+      const policy = defaults.permission_policy;
+      if (policy !== undefined && !POLICIES.includes(policy?.type)) {
+        err(`\`default_config.permission_policy.type\` must be ${POLICIES.join(", ")}`);
+      }
+      for (const key of Object.keys(defaults)) {
+        if (!["enabled", "permission_policy"].includes(key)) err(`unknown field \`default_config.${key}\``);
+      }
+    }
+  }
+  checkRows(tool.rows ?? [], err, { known: null });
 }
 
 function checkToolset(tool, err) {
@@ -152,9 +183,15 @@ function checkToolset(tool, err) {
     const hint = PREBUILT_TOOLS.includes(tool.name) ? `; since 0.2.1 all pre-built tools go in one file, ${TOOLS_DIR}/${TOOLSET_FILE}` : "";
     return err(`a \`## Tools\` table listing the pre-built tools to enable is required${hint}`);
   }
+  checkRows(tool.rows, err, { known: PREBUILT_TOOLS });
+}
+
+// The rows of a `## Tools` table. `known` is the list of valid tool names, when there is one.
+function checkRows(rows, err, { known }) {
   const seen = new Set();
-  for (const row of tool.rows) {
-    if (!PREBUILT_TOOLS.includes(row.name)) err(`\`${row.name}\` is not a pre-built tool; use ${PREBUILT_TOOLS.join(", ")}`);
+  for (const row of rows) {
+    if (!row.name) err("a `## Tools` row has no name");
+    else if (known && !known.includes(row.name)) err(`\`${row.name}\` is not a pre-built tool; use ${known.join(", ")}`);
     else if (seen.has(row.name)) err(`\`${row.name}\` is listed twice`);
     seen.add(row.name);
     if (!["true", "false"].includes(row.enabled.toLowerCase())) err(`\`${row.name}\`: Enabled must be true or false`);
@@ -194,26 +231,33 @@ function checkCustom(tool, err) {
   }
 }
 
-// The tools list sent to the API: one toolset entry with a config for each row of its table
-// (tools it doesn't list keep the API's defaults), then the custom tools, sorted by name.
+// The tools list sent to the API, each kind sorted by name: the pre-built toolset with a config
+// for each row of its table (tools it doesn't list keep the API's defaults), then a toolset for
+// each MCP server, then the custom tools.
 export function compileTools(tools) {
   const compiled = [];
   const toolset = tools.find((t) => t.data.type === TOOLSET);
-  if (toolset) {
-    const rows = [...(toolset.rows ?? [])].sort((a, b) => (a.name < b.name ? -1 : 1));
-    compiled.push({
-      type: TOOLSET,
-      configs: rows.map(({ name, enabled, permission }) => {
-        const config = { name, enabled: enabled.toLowerCase() === "true" };
-        if (permission) config.permission_policy = { type: permission };
-        return config;
-      }),
-    });
+  if (toolset) compiled.push({ type: TOOLSET, configs: configs(toolset.rows) });
+  for (const tool of byName(tools.filter((t) => t.data.type === MCP_TOOLSET))) {
+    const entry = { type: MCP_TOOLSET, mcp_server_name: tool.name };
+    if (tool.data.default_config) entry.default_config = tool.data.default_config;
+    if (tool.rows?.length) entry.configs = configs(tool.rows);
+    compiled.push(entry);
   }
   for (const tool of tools.filter((t) => t.data.type === "custom").sort((a, b) => (a.name < b.name ? -1 : 1))) {
     compiled.push({ type: "custom", name: tool.name, description: tool.data.description, input_schema: inputSchema(tool.params ?? []) });
   }
   return compiled;
+}
+
+const byName = (tools) => [...tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
+function configs(rows = []) {
+  return [...rows].sort((a, b) => (a.name < b.name ? -1 : 1)).map(({ name, enabled, permission }) => {
+    const config = { name, enabled: enabled.toLowerCase() === "true" };
+    if (permission) config.permission_policy = { type: permission };
+    return config;
+  });
 }
 
 function inputSchema(params) {

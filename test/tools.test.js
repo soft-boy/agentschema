@@ -87,7 +87,7 @@ test("the pre-built toolset file is checked", () => {
   assert.match(errs(toolset("bash |")), /`bash`: Enabled must be true or false/);
   assert.match(errs(PREBUILT_MD.replace("---\n\n", "enabled: false\n---\n\n")), /unknown field `enabled`/);
   assert.match(errs(PREBUILT_MD.replace("| Name | Enabled |", "| Name | On |")), /Tools table's columns/);
-  assert.match(errs("---\ntype: mcp_toolset\n---\n"), /`type` must be/);
+  assert.match(errs("---\ntype: plugin\n---\n"), /`type` must be/);
   // A 0.2.0-style file, one per tool with no table, points at the new layout.
   assert.match(errs("---\ntype: agent_toolset_20260401\n---\n", "tools/bash.md"), /since 0\.2\.1 all pre-built tools go in one file/);
   assert.match(errorsFor({ "tools/a.md": PREBUILT_MD, "tools/b.md": PREBUILT_MD })[0], /more than one `agent_toolset_20260401` file/);

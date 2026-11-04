@@ -1,6 +1,16 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { parseDocument } from "yaml";
 
 export class FileError extends Error {}
+
+// Edits a file's frontmatter through `edit(doc)`, keeping its comments and the rest of the file.
+export function updateFrontmatter(file, edit) {
+  const text = readFileSync(file, "utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const end = 4 + /^---[ \t]*$/m.exec(text.slice(4)).index;
+  const doc = parseDocument(text.slice(4, end));
+  edit(doc);
+  writeFileSync(file, `---\n${doc.toString({ lineWidth: 0 })}${text.slice(end)}`);
+}
 
 // Splits a Markdown file into YAML frontmatter (between `---` fences) and body.
 export function parseMarkdown(text, file) {

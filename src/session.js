@@ -1,7 +1,9 @@
+import { join } from "node:path";
 import { check } from "./check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
 import { LOCK_FILE, hashBody, readLock } from "./lock.js";
 import { TOOLS_DIR } from "./tools.js";
+import { credentialKey, vaultKey } from "./vaults.js";
 
 export class SessionError extends Error {}
 
@@ -34,6 +36,25 @@ export async function openSession(dir, { client, sessionId }) {
     agent: { type: "agent", id: agent.id, version: Number(agent.version) },
     environment_id: env.id,
   };
+
+  // Every deployed vault in vaults/, in name order: when two hold a credential for the same
+  // server, the first one wins.
+  const vaultIds = [];
+  for (const vault of instance?.vaults ?? []) {
+    const entry = lock.resources[vaultKey(vault)];
+    if (!entry) {
+      notes.push(`vault ${vault.path} hasn't been deployed, so this session doesn't have it; run agentschema deploy`);
+      continue;
+    }
+    vaultIds.push(entry.id);
+    for (const cred of vault.credentials) {
+      const credEntry = lock.resources[credentialKey(cred)];
+      if (!credEntry || credEntry.vault_id !== entry.id) {
+        notes.push(`credential ${cred.file} hasn't been created; run agentschema cred deploy ${join(dir, cred.file)}`);
+      }
+    }
+  }
+  if (vaultIds.length > 0) params.vault_ids = vaultIds;
   const name = instance?.agent.data.name;
   params.title = name ? `${name} (agentschema run)` : "agentschema run";
   return { session: await client.beta.sessions.create(params), notes };

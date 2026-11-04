@@ -1,5 +1,6 @@
 import { AGENT_FILE, ENV_FILE, readInstance } from "./instance.js";
-import { TOOLS_DIR, checkTools, readTools } from "./tools.js";
+import { MCP_TOOLSET, TOOLS_DIR, checkTools, readTools } from "./tools.js";
+import { CREDENTIAL_TYPES, ENV_VAR, SECRET_FIELDS, TOKEN_ENDPOINT_AUTH, VAULT_FILE, get, readVaults } from "./vaults.js";
 
 const AGENT_FIELDS = new Set([
   "name", "model", "description", "mcp_servers", "skills",
@@ -22,20 +23,27 @@ const isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v)
 export function check(dir) {
   const { agent, env, errors } = readInstance(dir);
   const { tools, errors: toolErrors } = readTools(dir);
-  errors.push(...toolErrors);
+  const { vaults, errors: vaultErrors } = readVaults(dir);
+  errors.push(...toolErrors, ...vaultErrors);
   const warnings = [];
 
   if (agent) checkAgent(agent, errors, warnings);
   if (env) checkEnv(env, errors, warnings);
   checkTools(tools, errors);
-  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env], ...tools.map((t) => [t.file, t])]) {
+  if (agent) checkMcpServers(agent, tools, errors);
+  if (agent && env) checkMcpNetworking(agent, env, warnings);
+  for (const vault of vaults) checkVault(vault, errors, warnings);
+  checkEnvVarCredentials(vaults, env, warnings);
+
+  const vaultFiles = vaults.flatMap((v) => [...(v.file ? [[`${v.path}/${VAULT_FILE}`, v.file]] : []), ...v.credentials.map((c) => [c.file, c])]);
+  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env], ...tools.map((t) => [t.file, t]), ...vaultFiles]) {
     if (!parsed) continue;
     for (const [pattern, what] of SECRET_PATTERNS) {
       if (pattern.test(parsed.raw)) errors.push(`${file}: looks like it contains ${what}; keep secrets out of these files`);
     }
   }
 
-  return { errors, warnings, instance: agent && env ? { agent, env, tools } : null };
+  return { errors, warnings, instance: agent && env ? { agent, env, tools, vaults } : null };
 }
 
 function checkAgent({ data, body }, errors, warnings) {
@@ -99,6 +107,206 @@ function checkEnv({ data }, errors, warnings) {
 
   for (const key of Object.keys(data)) {
     if (!ENV_FIELDS.has(key)) warnings.push(`${ENV_FILE}: unknown field \`${key}\` will be sent to the API as written`);
+  }
+}
+
+const mcpServers = (agent) => (Array.isArray(agent.data.mcp_servers) ? agent.data.mcp_servers.filter(isObject) : []);
+
+// Each server agent.md declares needs a toolset file, and each toolset file a declared server;
+// the API rejects an agent otherwise.
+function checkMcpServers(agent, tools, errors) {
+  const err = (msg) => errors.push(`${AGENT_FILE}: ${msg}`);
+  const names = new Set();
+  for (const server of mcpServers(agent)) {
+    const label = typeof server.name === "string" && server.name ? `\`${server.name}\`` : "an entry";
+    if (server.type !== "url") err(`\`mcp_servers\`: ${label} must have \`type: url\``);
+    if (typeof server.name !== "string" || server.name === "" || server.name.length > 255) {
+      err("`mcp_servers`: each server needs a `name` of 1 to 255 characters");
+    } else if (names.has(server.name)) {
+      err(`\`mcp_servers\`: \`${server.name}\` is declared twice`);
+    }
+    if (typeof server.url !== "string" || !/^https?:\/\/\S+$/.test(server.url) || server.url.length > 2048) {
+      err(`\`mcp_servers\`: ${label} needs a \`url\`, an http(s) URL of at most 2048 characters`);
+    }
+    names.add(server.name);
+  }
+
+  const toolsets = tools.filter((t) => t.data.type === MCP_TOOLSET);
+  const covered = new Set(toolsets.map((t) => t.data.mcp_server_name));
+  for (const name of names) {
+    if (typeof name === "string" && name && !covered.has(name)) {
+      err(`\`mcp_servers\`: \`${name}\` has no toolset; add ${TOOLS_DIR}/${name}.md with \`type: mcp_toolset\`, or the API rejects the agent`);
+    }
+  }
+  for (const toolset of toolsets) {
+    const name = toolset.data.mcp_server_name;
+    if (typeof name === "string" && name && !names.has(name)) {
+      errors.push(`${toolset.file}: \`${name}\` isn't in ${AGENT_FILE}'s \`mcp_servers\``);
+    }
+  }
+}
+
+// A limited network blocks MCP servers that aren't allowed, and the API then refuses to start sessions.
+function checkMcpNetworking(agent, env, warnings) {
+  const net = env.data.config?.networking;
+  if (net?.type !== "limited" || net.allow_mcp_servers === true) return;
+  const allowed = net.allowed_hosts ?? [];
+  for (const server of mcpServers(agent)) {
+    let host;
+    try {
+      host = new URL(server.url).host;
+    } catch {
+      continue;
+    }
+    if (!allowed.includes(host)) {
+      warnings.push(
+        `${ENV_FILE}: its limited networking doesn't allow MCP server \`${server.name}\` (${host}), so sessions won't start; ` +
+          `set config.networking.allow_mcp_servers to true, or add ${host} to allowed_hosts`,
+      );
+    }
+  }
+}
+
+function checkVault(vault, errors, warnings) {
+  if (vault.name.length > 255) errors.push(`${vault.path}: a vault's name (its folder name) must be at most 255 characters`);
+
+  if (vault.file) {
+    const file = `${vault.path}/${VAULT_FILE}`;
+    const err = (msg) => errors.push(`${file}: ${msg}`);
+    const { data } = vault.file;
+    if ("display_name" in data) err("`display_name` is not allowed; the folder name is the vault's name");
+    checkMetadata(data.metadata, 16, err);
+    for (const key of Object.keys(data)) {
+      if (key !== "metadata" && key !== "display_name") warnings.push(`${file}: unknown field \`${key}\` will be sent to the API as written`);
+    }
+  }
+
+  if (vault.credentials.length > 20) errors.push(`${vault.path}: ${vault.credentials.length} credentials; a vault holds at most 20`);
+  const urls = new Map();
+  const secretNames = new Map();
+  for (const cred of vault.credentials) {
+    checkCredential(cred, errors, warnings);
+    const url = cred.data.auth?.mcp_server_url;
+    if (typeof url === "string") {
+      if (urls.has(url)) errors.push(`${cred.file}: ${urls.get(url)} is already a credential for ${url}; a vault holds one per server`);
+      else urls.set(url, cred.file);
+    }
+    const secretName = cred.data.auth?.secret_name;
+    if (typeof secretName === "string") {
+      if (secretNames.has(secretName)) errors.push(`${cred.file}: ${secretNames.get(secretName)} already sets ${secretName}; a vault holds one per variable`);
+      else secretNames.set(secretName, cred.file);
+    }
+  }
+}
+
+// What an environment variable credential depends on outside its own file.
+function checkEnvVarCredentials(vaults, env, warnings) {
+  const creds = vaults.flatMap((v) => v.credentials).filter((c) => c.data.auth?.type === ENV_VAR);
+  const net = env?.data.config?.networking;
+  const seen = new Map();
+  for (const cred of creds) {
+    const warn = (msg) => warnings.push(`${cred.file}: ${msg}`);
+    const { secret_name: name, networking } = cred.data.auth;
+
+    // Two vaults can both set a variable, but the docs don't say which one wins.
+    if (typeof name === "string") {
+      if (seen.has(name) && seen.get(name).vault !== cred.vault) warn(`${seen.get(name).file} also sets ${name}, and the API doesn't document which vault wins`);
+      else seen.set(name, cred);
+    }
+
+    if (env?.data.config?.type === "self_hosted") warn("environment variable credentials aren't supported on self-hosted environments yet");
+
+    // allowed_hosts only decides where the secret is substituted; the environment decides what's reachable.
+    if (net?.type === "limited" && networking?.type === "limited" && Array.isArray(networking.allowed_hosts)) {
+      for (const host of networking.allowed_hosts) {
+        if (!(net.allowed_hosts ?? []).includes(host)) {
+          warn(`${ENV_FILE}'s limited networking doesn't allow ${host}, so requests to it will be blocked; add it to allowed_hosts in ${ENV_FILE}`);
+        }
+      }
+    }
+  }
+}
+
+function checkCredential(cred, errors, warnings) {
+  const err = (msg) => errors.push(`${cred.file}: ${msg}`);
+  const warn = (msg) => warnings.push(`${cred.file}: ${msg}`);
+  const { data } = cred;
+  if (cred.name.length > 255) err("a credential's name (its file name) must be at most 255 characters");
+  if ("display_name" in data) err("`display_name` is not allowed; the file name is the credential's name");
+  checkMetadata(data.metadata, 16, err);
+  for (const key of Object.keys(data)) {
+    if (!["auth", "metadata", "display_name"].includes(key)) warn(`unknown field \`${key}\` will be sent to the API as written`);
+  }
+
+  const { auth } = data;
+  if (!isObject(auth)) return err("`auth` is required");
+  if (!CREDENTIAL_TYPES.includes(auth.type)) return err(`\`auth.type\` must be ${CREDENTIAL_TYPES.map((t) => `\`${t}\``).join(" or ")}; other credential types aren't supported yet`);
+
+  for (const path of SECRET_FIELDS[auth.type]) {
+    if (get(auth, path) !== undefined) {
+      err(`\`auth.${path.join(".")}\` doesn't go in the file; \`agentschema cred deploy\` asks for it and sends it straight to the vault`);
+    }
+  }
+
+  if (auth.type === ENV_VAR) return checkEnvVarAuth(auth, err, warn);
+
+  const url = (value, field) => {
+    if (typeof value !== "string" || value === "") return err(`\`${field}\` is required`);
+    if (!/^https?:\/\/\S+$/.test(value)) err(`\`${field}\` must be an http(s) URL`);
+  };
+  url(auth.mcp_server_url, "auth.mcp_server_url");
+  for (const key of Object.keys(auth)) {
+    if (!["type", "mcp_server_url", "refresh", "access_token", "expires_at"].includes(key)) {
+      warn(`unknown field \`auth.${key}\` will be sent to the API as written`);
+    }
+  }
+
+  if (auth.refresh === undefined || auth.refresh === null) return;
+  const { refresh } = auth;
+  if (!isObject(refresh)) return err("`auth.refresh` must be a mapping");
+  url(refresh.token_endpoint, "auth.refresh.token_endpoint");
+  if (typeof refresh.client_id !== "string" || refresh.client_id === "") err("`auth.refresh.client_id` is required, as a string (quote it if it looks like a number)");
+  for (const field of ["scope", "resource"]) {
+    if (refresh[field] !== undefined && typeof refresh[field] !== "string") err(`\`auth.refresh.${field}\` must be a string`);
+  }
+  if (!isObject(refresh.token_endpoint_auth) || !TOKEN_ENDPOINT_AUTH.includes(refresh.token_endpoint_auth.type)) {
+    err(`\`auth.refresh.token_endpoint_auth.type\` must be ${TOKEN_ENDPOINT_AUTH.map((t) => `\`${t}\``).join(", ")}`);
+  }
+  for (const key of Object.keys(refresh)) {
+    if (!["token_endpoint", "client_id", "scope", "resource", "token_endpoint_auth", "refresh_token"].includes(key)) {
+      warn(`unknown field \`auth.refresh.${key}\` will be sent to the API as written`);
+    }
+  }
+}
+
+function checkEnvVarAuth(auth, err, warn) {
+  if (typeof auth.secret_name !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(auth.secret_name)) {
+    err("`auth.secret_name` is required, and must be a variable name like STRIPE_API_KEY");
+  }
+
+  const { networking: net, injection_location: where } = auth;
+  if (!isObject(net) || !["limited", "unrestricted"].includes(net.type)) {
+    err("`auth.networking.type` is required, and must be `limited` or `unrestricted`");
+  } else if (net.type === "unrestricted") {
+    warn("`auth.networking` is `unrestricted`, so the secret is substituted on requests to any host; a prompt-injected agent could send it anywhere");
+  } else if (!Array.isArray(net.allowed_hosts) || net.allowed_hosts.length === 0 || net.allowed_hosts.some((h) => typeof h !== "string" || h === "")) {
+    err("`auth.networking.allowed_hosts` must list the hosts the secret may be sent to");
+  }
+
+  if (where !== undefined && where !== null) {
+    if (!isObject(where)) err("`auth.injection_location` must be a mapping");
+    else {
+      for (const field of ["header", "body"]) {
+        if (where[field] !== undefined && typeof where[field] !== "boolean") err(`\`auth.injection_location.${field}\` must be true or false`);
+      }
+      if (where.header !== true && where.body !== true) err("`auth.injection_location` must enable `header` or `body`; a field you leave out is false");
+    }
+  }
+
+  for (const key of Object.keys(auth)) {
+    if (!["type", "secret_name", "secret_value", "networking", "injection_location"].includes(key)) {
+      warn(`unknown field \`auth.${key}\` will be sent to the API as written`);
+    }
   }
 }
 

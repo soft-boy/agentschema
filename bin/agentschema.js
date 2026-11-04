@@ -4,24 +4,33 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
 import { chat } from "../src/chat.js";
+import { spawn } from "node:child_process";
+import { credCreate, credDeploy } from "../src/cred-menu.js";
+import { credDelete, credLogin } from "../src/cred.js";
 import { check } from "../src/check.js";
 import { DeleteError, deleteAgent, deleteSession } from "../src/delete.js";
 import { DeployError, deploy } from "../src/deploy.js";
 import { InitError, init } from "../src/init.js";
 import { listAgents, listSessions } from "../src/list.js";
+import { prompts } from "../src/prompts.js";
 import { SessionError, openSession } from "../src/session.js";
+import { toolsCreate } from "../src/tools-menu.js";
+
+const FOOTER = `ags is a short name for agentschema. dir defaults to the current directory. Every command
+but init, check and tools create authenticates with ANTHROPIC_API_KEY, or with a profile from \`ant auth login\`.`;
 
 const USAGE = `Usage: agentschema <command> [dir] [options]
 
 Commands:
   init <name>           Scaffold a new agent folder, asking a few questions
-  check [dir]           Validate agent.md and env.md, without calling the API
-  deploy [dir]          Create or update the agent and environment, and write claude-lock.json
+  check [dir]           Validate the folder's files, without calling the API
+  deploy [dir]          Create or update the agent, environment and vaults, and write claude-lock.json
   run [dir]             Chat with the deployed agent in a new session
   list                  List the agents in your workspace
   delete <agent_id>     Archive an agent (agents can't be deleted outright)
-  sessions list         List the sessions in your workspace, newest first
-  sessions delete <id>  Delete a session and its history
+  tools <command>       Add pre-built tools, custom tools and MCP servers (agentschema tools -h)
+  sessions <command>    List and delete sessions (agentschema sessions -h)
+  cred <command>        Create and manage the credentials in vaults/ (agentschema cred -h)
 
 Options:
   -y, --yes         (init) Skip the questions and use the defaults
@@ -32,14 +41,65 @@ Options:
   -h, --help        Show this help
   -v, --version     Show the version
 
-dir defaults to the current directory. Every command but init and check authenticates with
-ANTHROPIC_API_KEY, or with a profile from \`ant auth login\`.`;
+${FOOTER}`;
+
+const TOOLS_USAGE = `Usage: agentschema tools <command> [options]
+
+Each tool is a file in tools/. The pre-built tools share one file, each custom tool has its own,
+and so does each MCP server.
+
+Commands:
+  create [dir]    Add a tool: asks whether it's the pre-built tools, a custom tool or an
+                  MCP server, then writes its file
+
+Options:
+  -h, --help      Show this help
+
+dir defaults to the current directory.`;
+
+const SESSIONS_USAGE = `Usage: agentschema sessions <command> [options]
+
+Commands:
+  list            List the sessions in your workspace, newest first
+  delete <id>     Delete a session and its history
+
+Options:
+  -y, --yes       (delete) Don't ask for confirmation
+  -h, --help      Show this help
+
+Resume a session with agentschema run --resume <id>.`;
+
+const CRED_USAGE = `Usage: agentschema cred <command> [options]
+
+Each credential is a file in vaults/<vault>/<name>.md, without its secrets, which go straight
+to Anthropic.
+
+Commands:
+  create [dir]    Add a credential: asks which vault it goes in and whether it's for an MCP
+                  server or an environment variable, writes its file, then signs you in or
+                  asks for its secrets, and creates it in Anthropic
+  deploy <file>   Create the credential a file describes in Anthropic, by signing in or
+                  pasting its secrets
+  login <file>    Sign in to the credential's MCP server in the browser, and store the tokens,
+                  creating the credential or replacing the tokens of the existing one
+  delete <file>   Delete the credential a file describes from Anthropic; the file stays
+
+Options:
+  --port <port>   (create, deploy, login) Port for the sign-in redirect (default: any free port)
+  -y, --yes       (delete) Don't ask for confirmation
+  -h, --help      Show this help
+
+dir defaults to the current directory.`;
+
+// The commands that group subcommands, and their help.
+const GROUPS = { tools: TOOLS_USAGE, sessions: SESSIONS_USAGE, cred: CRED_USAGE };
 
 const OPTIONS = {
   yes: { type: "boolean", short: "y" },
   "dry-run": { type: "boolean" },
   force: { type: "boolean" },
   resume: { type: "string" },
+  port: { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "v" },
 };
@@ -51,8 +111,13 @@ const COMMANDS = {
   run: { args: [0, 1], options: ["resume"] },
   list: { args: [0, 0], options: [] },
   delete: { args: [1, 1], options: ["yes"] },
+  "tools create": { args: [0, 1], options: [] },
   "sessions list": { args: [0, 0], options: [] },
   "sessions delete": { args: [1, 1], options: ["yes"] },
+  "cred create": { args: [0, 1], options: ["port"] },
+  "cred deploy": { args: [1, 1], options: ["port"] },
+  "cred login": { args: [1, 1], options: ["port"] },
+  "cred delete": { args: [1, 1], options: ["yes"] },
 };
 
 async function main(argv) {
@@ -60,39 +125,45 @@ async function main(argv) {
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
   } catch (err) {
-    console.error(`agentschema: ${err.message}\n\n${USAGE}`);
+    console.error(`agentschema: ${err.message}\n\n${GROUPS[argv[0]] ?? USAGE}`);
     return 1;
   }
   const { values, positionals } = parsed;
   let [command, ...args] = positionals;
-  if (command === "sessions") command = `sessions ${args.shift() ?? ""}`.trim();
+  const group = command in GROUPS ? command : null;
+  if (group) command = `${group} ${args.shift() ?? ""}`.trim();
+  const usage = group ? GROUPS[group] : USAGE;
 
   if (values.version) {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     console.log(pkg.version);
     return 0;
   }
-  if (!command || values.help) {
-    console.log(USAGE);
-    return command || values.help ? 0 : 1;
+  if (values.help) {
+    console.log(usage);
+    return 0;
   }
-  if (command.startsWith("sessions") && !(command in COMMANDS)) {
-    console.error(`agentschema: usage: agentschema sessions list | sessions delete <id>`);
+  if (!command) {
+    console.log(USAGE);
+    return 1;
+  }
+  if (group && command === group) {
+    console.error(usage);
     return 1;
   }
   if (!(command in COMMANDS)) {
-    console.error(`agentschema: unknown command "${command}"\n\n${USAGE}`);
+    console.error(`agentschema: unknown command "${command}"\n\n${usage}`);
     return 1;
   }
   const spec = COMMANDS[command];
   const misplaced = Object.keys(values).filter((k) => !spec.options.includes(k));
   if (args.length > spec.args[1] || misplaced.length > 0) {
     const arg = args[spec.args[1]] ?? `--${misplaced[0]}`;
-    console.error(`agentschema: unexpected argument ${arg} for ${command}\n\n${USAGE}`);
+    console.error(`agentschema: unexpected argument ${arg} for ${command}\n\n${usage}`);
     return 1;
   }
   if (args.length < spec.args[0]) {
-    const example = { init: "init my-agent", delete: "delete agent_…", "sessions delete": "sessions delete sesn_…" }[command];
+    const example = { init: "init my-agent", delete: "delete agent_…", "sessions delete": "sessions delete sesn_…", "cred deploy": "cred deploy my-agent/vaults/Ops/Slack.md", "cred login": "cred login my-agent/vaults/Ops/Slack.md", "cred delete": "cred delete my-agent/vaults/Ops/Slack.md" }[command];
     console.error(`agentschema: ${command} needs an argument, e.g. agentschema ${example}`);
     return 1;
   }
@@ -146,6 +217,39 @@ async function main(argv) {
       return 0;
     }
 
+    if (command === "tools create") {
+      const io = prompts(process.stdin, process.stdout, { cancelled: () => new DeployError("cancelled") });
+      try {
+        await toolsCreate(args[0] ?? ".", { io, log: (line) => console.log(line) });
+      } finally {
+        io.close();
+      }
+      return 0;
+    }
+
+    if (["cred create", "cred deploy", "cred login"].includes(command)) {
+      if (values.port !== undefined && !/^\d+$/.test(values.port)) throw new DeployError(`--port must be a number, not "${values.port}"`);
+      const io = prompts(process.stdin, process.stdout, { cancelled: () => new DeployError("cancelled") });
+      const options = { client: makeClient(false), openBrowser, port: values.port ?? 0, log: (line) => console.log(line) };
+      try {
+        if (command === "cred create") await credCreate(args[0] ?? ".", { ...options, io });
+        else if (command === "cred deploy") await credDeploy(args[0], { ...options, io });
+        else await credLogin(args[0], { ...options, ask: (q, { secret }) => (secret ? io.secret(q.trim()) : io.text(q.trim())) });
+      } finally {
+        io.close();
+      }
+      return 0;
+    }
+
+    if (command === "cred delete") {
+      await credDelete(args[0], {
+        client: makeClient(false),
+        confirm: values.yes ? async () => true : confirm,
+        log: (line) => console.log(line),
+      });
+      return 0;
+    }
+
     if (command === "run") {
       const client = makeClient(false);
       const { session, notes } = await openSession(dir, {
@@ -177,6 +281,18 @@ async function confirm(question) {
     return /^(y|yes)$/i.test((await rl.question(`${question} [y/N] `)).trim());
   } finally {
     rl.close();
+  }
+}
+
+// Opens a URL in the default browser; the URL is also printed, in case this fails.
+function openBrowser(url) {
+  const [cmd, args] = process.platform === "darwin" ? ["open", [url]]
+    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
+    : ["xdg-open", [url]];
+  try {
+    spawn(cmd, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref();
+  } catch {
+    // The URL was printed; the user can open it.
   }
 }
 

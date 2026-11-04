@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { createInterface, emitKeypressEvents } from "node:readline";
 import { stringify } from "yaml";
 import { AGENT_FILE, ENV_FILE } from "./instance.js";
+import { prompts } from "./prompts.js";
 import { TOOLSET_FILE, PREBUILT_TOOLS, TOOLSET, TOOLS_DIR } from "./tools.js";
 
 export class InitError extends Error {}
@@ -46,9 +46,10 @@ export function scaffold(answers) {
   return files;
 }
 
-// The pre-built toolset file, enabling `names` with the API's default permission policy.
-export function builtInFile(names) {
-  const rows = names.map((name) => `| \`${name}\` | \`true\` | |`).join("\n");
+// The pre-built toolset file, with a row for each of `names`: on if it's in `enabled`, with the
+// API's default permission policy.
+export function builtInFile(names, enabled = names) {
+  const rows = names.map((name) => `| \`${name}\` | \`${enabled.includes(name)}\` | |`).join("\n");
   return `---\ntype: ${TOOLSET}\n---\n\nThe tools Claude runs in the agent's container. Set Enabled to false to turn a tool off.\n\n## Tools\n\n| Name | Enabled | Permission |\n|---|---|---|\n${rows}\n`;
 }
 
@@ -75,15 +76,8 @@ export async function init(dir, { yes = false, input = process.stdin, output = p
 
 // Fills in `answers` from the user's replies; an empty reply keeps the default shown.
 async function ask(answers, input, output) {
-  const io = input.isTTY ? terminalPrompts(input, output) : linePrompts(input, output);
-  const confirm = async (question, fallback) => {
-    while (true) {
-      const reply = (await io.text(`${question} [y/n]`, fallback ? "y" : "n")).toLowerCase();
-      if (/^(y|yes)$/.test(reply)) return true;
-      if (/^(n|no)$/.test(reply)) return false;
-      output.write("Answer y or n\n");
-    }
-  };
+  const io = prompts(input, output, { cancelled: () => new InitError("cancelled") });
+  const { confirm } = io;
 
   try {
     answers.name = await io.text("Agent name?", answers.name);
@@ -98,95 +92,4 @@ async function ask(answers, input, output) {
   } finally {
     io.close();
   }
-}
-
-// Prompts for piped input: one answer per line, and choices picked by name or number.
-function linePrompts(input, output) {
-  const rl = createInterface({ input, output, terminal: false });
-  const lines = rl[Symbol.asyncIterator]();
-  let ended = false;
-
-  const text = async (question, fallback) => {
-    if (ended) return fallback;
-    output.write(`${question} (${fallback}) `);
-    const { value, done } = await lines.next();
-    if (done) {
-      ended = true;
-      output.write("\n");
-      return fallback;
-    }
-    return value.trim() || fallback;
-  };
-  const select = async (question, choices, fallback) => {
-    const listed = choices.map((c, i) => `${i + 1}) ${c}`).join("  ");
-    while (true) {
-      const reply = await text(`${question} ${listed}`, String(choices.indexOf(fallback) + 1));
-      const picked = choices[Number(reply) - 1] ?? choices.find((c) => c === reply);
-      if (picked) return picked;
-      output.write(`Pick one of: ${choices.join(", ")}\n`);
-    }
-  };
-  return { text, select, close: () => rl.close() };
-}
-
-const ESC = "\x1b[";
-const cyan = (s) => `${ESC}36m${s}${ESC}0m`;
-const dim = (s) => `${ESC}2m${s}${ESC}0m`;
-
-// Prompts for a terminal: choices are picked with the arrow keys and Enter.
-function terminalPrompts(input, output) {
-  const cancelled = () => new InitError("cancelled");
-
-  // A fresh readline per question, so it doesn't fight the raw-mode select for the arrow keys.
-  const text = (question, fallback) =>
-    new Promise((resolve, reject) => {
-      const rl = createInterface({ input, output, terminal: true });
-      rl.on("SIGINT", () => {
-        rl.close();
-        output.write("\n");
-        reject(cancelled());
-      });
-      rl.question(`${question} ${dim(`(${fallback})`)} `, (reply) => {
-        rl.close();
-        resolve(reply.trim() || fallback);
-      });
-    });
-
-  const select = (question, choices, fallback) =>
-    new Promise((resolve, reject) => {
-      let index = Math.max(0, choices.indexOf(fallback));
-      const render = (first) => {
-        if (!first) output.write(`${ESC}${choices.length}A`);
-        for (const [i, choice] of choices.entries()) {
-          output.write(`${ESC}2K${i === index ? cyan(`❯ ${choice}`) : `  ${choice}`}\n`);
-        }
-      };
-      const finish = (err) => {
-        input.off("keypress", onKey);
-        input.setRawMode(false);
-        input.pause();
-        // Collapse the list to one line with the answer.
-        output.write(`${ESC}${choices.length + 1}A${ESC}J${ESC}?25h`);
-        output.write(`${question} ${err ? dim("cancelled") : cyan(choices[index])}\n`);
-        err ? reject(err) : resolve(choices[index]);
-      };
-      const onKey = (str, key = {}) => {
-        if (key.ctrl && key.name === "c") return finish(cancelled());
-        if (key.name === "return" || key.name === "enter") return finish();
-        if (key.name === "up" || key.name === "k") index = (index - 1 + choices.length) % choices.length;
-        else if (key.name === "down" || key.name === "j" || key.name === "tab") index = (index + 1) % choices.length;
-        else if (/^[1-9]$/.test(str ?? "") && Number(str) <= choices.length) index = Number(str) - 1;
-        else return;
-        render(false);
-      };
-
-      emitKeypressEvents(input);
-      input.setRawMode(true);
-      input.resume();
-      output.write(`${question} ${dim("(↑/↓, Enter)")}\n${ESC}?25l`);
-      render(true);
-      input.on("keypress", onKey);
-    });
-
-  return { text, select, close() {} };
 }

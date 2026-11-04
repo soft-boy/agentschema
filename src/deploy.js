@@ -1,24 +1,20 @@
+import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { check } from "./check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
 import { LOCK_FILE, hashBody, readLock, writeLock } from "./lock.js";
+import { ENV_VAR, changedImmutableFields, credentialKey, credentialSettings, vaultBody, vaultKey } from "./vaults.js";
 
 export class DeployError extends Error {}
 
-// Creates or updates the environment and agent a folder defines, recording their IDs in claude-lock.json.
+// Creates or updates the environment, agent and vaults a folder defines, recording their IDs
+// in claude-lock.json. Credentials are only updated here: creating one needs its secrets, so
+// that's `cred deploy`'s job.
 // Returns the plan: one { file, kind, action, id, version } entry per resource.
 export async function deploy(dir, { client, dryRun = false, force = false, log = () => {} }) {
   const { errors, instance } = check(dir);
   if (errors.length > 0) throw new DeployError(`check failed:\n  ${errors.join("\n  ")}`);
-
-  const baseURL = client.baseURL;
-  const lock = readLock(dir) ?? { version: 1, origin: { base_url: baseURL }, resources: {} };
-  lock.resources ??= {};
-  if (lock.origin?.base_url && lock.origin.base_url !== baseURL) {
-    throw new DeployError(
-      `${LOCK_FILE} was written for ${lock.origin.base_url}, but this client uses ${baseURL}`,
-    );
-  }
+  const lock = openLock(dir, client);
 
   const steps = [
     { file: ENV_FILE, kind: "environment", body: envBody(instance) },
@@ -53,11 +49,124 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
     log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} ${step.kind} ${result.id}${version}`);
   }
 
-  return steps.map(({ file, kind, action, key }) => ({
+  const vaultSteps = await deployVaults(dir, instance.vaults, { client, lock, dryRun, log });
+
+  return [...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
     file, kind, action,
     id: lock.resources[key]?.id,
     version: lock.resources[key]?.version,
   }));
+}
+
+// Reads claude-lock.json, or starts a new one, and checks it was written for this API.
+export function openLock(dir, client) {
+  const baseURL = client.baseURL;
+  const lock = readLock(dir) ?? { version: 1, origin: { base_url: baseURL }, resources: {} };
+  lock.resources ??= {};
+  if (lock.origin?.base_url && lock.origin.base_url !== baseURL) {
+    throw new DeployError(
+      `${LOCK_FILE} was written for ${lock.origin.base_url}, but this client uses ${baseURL}`,
+    );
+  }
+  return lock;
+}
+
+// Creates or updates each vault, then updates the settings of credentials already created.
+// A credential file with no credential yet is reported, not created: that needs its secrets.
+async function deployVaults(dir, vaults, { client, lock, dryRun, log }) {
+  const steps = [];
+  for (const vault of vaults) {
+    const step = planStep(lock, { file: vault.path, key: vaultKey(vault), kind: "vault", body: vaultBody(vault) });
+    steps.push(step);
+    for (const cred of vault.credentials) {
+      const credStep = planStep(lock, { file: cred.file, key: credentialKey(cred), kind: "credential", body: credentialSettings(cred) });
+      credStep.cred = cred;
+      credStep.vaultStep = step;
+      // A credential belongs to the vault it was created in; if that vault was replaced, it's gone.
+      if (credStep.entry && credStep.entry.vault_id !== step.entry?.id) credStep.entry = undefined;
+      if (!credStep.entry) credStep.action = "missing";
+      steps.push(credStep);
+    }
+  }
+
+  // Check every credential update first, so an immutable field changed in one file stops the
+  // deploy before anything is sent.
+  if (!dryRun) {
+    for (const step of steps.filter((s) => s.kind === "credential" && s.action === "update")) {
+      const remote = await retrieve(step, () => client.beta.vaults.credentials.retrieve(step.entry.id, { vault_id: step.entry.vault_id }));
+      const changed = changedImmutableFields(step.cred, remote.auth);
+      if (changed.length > 0) {
+        throw new DeployError(
+          `${step.file}: ${changed.map((f) => `\`auth.${f}\``).join(", ")} can't be changed on an existing credential. ` +
+            `Delete it with \`agentschema cred delete ${join(dir, step.file)}\`, then create it again with \`agentschema cred deploy\`.`,
+        );
+      }
+      step.remote = remote;
+    }
+  }
+
+  for (const step of steps) {
+    if (step.action === "missing") {
+      log(`missing   credential ${step.file} (create it with: agentschema cred deploy ${join(dir, step.file)})`);
+      continue;
+    }
+    if (dryRun || step.action === "unchanged") {
+      log(`${step.action.padEnd(9)} ${step.kind} ${step.entry?.id ?? ""}`.trimEnd());
+      continue;
+    }
+
+    let result;
+    if (step.kind === "vault") {
+      if (step.action === "create") {
+        result = await call(step, () => client.beta.vaults.create(step.body));
+      } else {
+        const remote = await retrieve(step, () => client.beta.vaults.retrieve(step.entry.id));
+        const body = { ...step.body, metadata: metadataWithDeletions(step.body.metadata, remote.metadata) };
+        result = await call(step, () => client.beta.vaults.update(step.entry.id, body));
+      }
+      lock.resources[step.key] = { kind: "vault", id: result.id, hash: step.hash };
+    } else {
+      result = await call(step, () => client.beta.vaults.credentials.update(step.entry.id, credentialUpdateBody(step)));
+      lock.resources[step.key] = { ...step.entry, hash: step.hash };
+    }
+    writeLock(dir, lock);
+    log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} ${step.kind} ${result.id}`);
+  }
+  return steps;
+}
+
+function planStep(lock, step) {
+  step.hash = hashBody(step.body);
+  step.entry = lock.resources[step.key];
+  if (step.entry && step.entry.kind !== step.kind) {
+    throw new DeployError(`${LOCK_FILE}: entry for ${step.key} is a ${step.entry.kind}, expected ${step.kind}`);
+  }
+  step.action = !step.entry ? "create" : step.entry.hash === step.hash ? "unchanged" : "update";
+  return step;
+}
+
+// Only a credential's name, metadata, refresh scope, networking and injection location can
+// change; the immutable fields were checked to be unchanged, and the secrets stay as they are
+// in the vault.
+function credentialUpdateBody(step) {
+  const { display_name, auth, metadata } = step.body;
+  const body = {
+    vault_id: step.entry.vault_id,
+    display_name,
+    metadata: metadataWithDeletions(metadata, step.remote?.metadata),
+  };
+  if (auth.refresh) body.auth = { type: auth.type, refresh: { scope: auth.refresh.scope ?? null } };
+  if (auth.type === ENV_VAR) {
+    // An update keeps what it isn't sent, so spell out what the file means: when created,
+    // no injection_location enables both, and a field left out of one is false.
+    const where = auth.injection_location;
+    body.auth = {
+      type: auth.type,
+      networking: auth.networking,
+      injection_location: where ? { header: where.header === true, body: where.body === true } : { header: true, body: true },
+    };
+  }
+  return body;
 }
 
 async function deployEnvironment(client, step) {
@@ -100,13 +209,13 @@ async function deployAgent(client, step, force) {
 }
 
 // Metadata updates merge, so keys removed from the file are sent as null to delete them.
-function metadataWithDeletions(local = {}, remote = {}) {
+export function metadataWithDeletions(local = {}, remote = {}) {
   const merged = { ...local };
   for (const key of Object.keys(remote ?? {})) if (!(key in merged)) merged[key] = null;
   return merged;
 }
 
-async function retrieve(step, fn) {
+export async function retrieve(step, fn) {
   let remote;
   try {
     remote = await fn();
@@ -128,7 +237,7 @@ async function retrieve(step, fn) {
   return remote;
 }
 
-async function call(step, fn) {
+export async function call(step, fn) {
   try {
     return await fn();
   } catch (err) {

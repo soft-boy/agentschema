@@ -33,6 +33,16 @@ npm install -g @soft-boy/agentschema
 
 This installs `agentschema`, and `ags` as a short name for it.
 
+## Getting started
+
+Create an agent, deploy it, and chat with it:
+
+```sh
+agentschema init my-agent --yes
+agentschema deploy my-agent
+agentschema run my-agent
+```
+
 ## Specification
 
 `agent.md` and `env.md` are required; everything else is optional. `agentschema check` validates a folder without calling the API.
@@ -127,16 +137,6 @@ Commands that call the API use `ANTHROPIC_API_KEY` if it's exported, or otherwis
 
 ```sh
 ANTHROPIC_API_KEY=sk-ant-…
-```
-
-## Getting started
-
-Create an agent, deploy it, and chat with it:
-
-```sh
-agentschema init my-agent --yes
-agentschema deploy my-agent
-agentschema run my-agent
 ```
 
 ## Usage

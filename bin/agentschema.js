@@ -10,6 +10,7 @@ import { credDelete, credLogin } from "../src/cred.js";
 import { check } from "../src/check.js";
 import { DeleteError, deleteAgent, deleteSession } from "../src/delete.js";
 import { DeployError, deploy } from "../src/deploy.js";
+import { loadEnvFile } from "../src/dotenv.js";
 import { InitError, init } from "../src/init.js";
 import { listAgents, listSessions } from "../src/list.js";
 import { prompts } from "../src/prompts.js";
@@ -25,7 +26,7 @@ Commands:
   init <name>           Scaffold a new agent folder, asking a few questions
   check [dir]           Validate the folder's files, without calling the API
   deploy [dir]          Create or update the agent, environment and vaults, and write claude-lock.json
-  run [dir]             Chat with the deployed agent in a new session
+  run [dir]             Chat with the deployed agent in a new session, loading dir/.env for your tools
   list                  List the agents in your workspace
   delete <agent_id>     Archive an agent (agents can't be deleted outright)
   tools <command>       Add pre-built tools, custom tools and MCP servers (agentschema tools -h)
@@ -251,7 +252,10 @@ async function main(argv) {
     }
 
     if (command === "run") {
+      // Made first, so .env only reaches your tools: Anthropic credentials still come from the
+      // shell, the same as for every other command.
       const client = makeClient(false);
+      for (const warning of loadEnvFile(dir)) console.warn(`warning: ${warning}`);
       const { session, notes } = await openSession(dir, {
         client,
         sessionId: values.resume,

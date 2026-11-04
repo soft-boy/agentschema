@@ -40,7 +40,7 @@ export async function openSession(dir, { client, sessionId }) {
 }
 
 // Drives a session one turn at a time. `ui` answers what only a person can:
-//   ui.event(event)          show an event
+//   ui.event(event)          show an event, including the stream-only event_start / event_delta previews
 //   ui.confirm(event)        -> { result: "allow" | "deny", deny_message? } for a paused tool call
 //   ui.customToolResult(event) -> string, or { text, isError }: the result of a custom tool call
 export class Conversation {
@@ -65,7 +65,7 @@ export class Conversation {
 
   async #turn(events) {
     // Stream first: events emitted before the stream opens would never reach us.
-    this.stream = await this.client.beta.sessions.events.stream(this.sessionId);
+    this.stream = await this.#openStream();
     await this.client.beta.sessions.events.send(this.sessionId, { events });
 
     for (let attempt = 0; ; attempt++) {
@@ -78,13 +78,19 @@ export class Conversation {
       } catch (err) {
         if (this.closed || attempt >= 3) throw err;
         // The stream has no replay: reopen it, then catch up from the event history.
-        this.stream = await this.client.beta.sessions.events.stream(this.sessionId);
+        this.stream = await this.#openStream();
         for await (const event of this.client.beta.sessions.events.list(this.sessionId)) {
           const done = await this.#handle(event);
           if (done) return done;
         }
       }
     }
+  }
+
+  // Opts in to live previews, so agent text arrives as event_start / event_delta events while
+  // the model is still writing, ahead of the complete agent.message.
+  #openStream() {
+    return this.client.beta.sessions.events.stream(this.sessionId, { event_deltas: ["agent.message"] });
   }
 
   // Returns a value when the turn is over.

@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
-import { chat } from "../src/chat.js";
+import { chat, textStream } from "../src/chat.js";
 import { deploy } from "../src/deploy.js";
 import { Conversation, SessionError, openSession } from "../src/session.js";
 import { AGENT_MD, instance } from "./helpers.js";
@@ -213,3 +213,61 @@ function deployClient() {
   });
   return { baseURL: "https://api.anthropic.com", beta: { agents: resource("agent"), environments: resource("env") } };
 }
+
+const start = (eid) => ({ type: "event_start", event: { type: "agent.message", id: eid } });
+const delta = (eid, text, index = 0) => ({ type: "event_delta", event_id: eid, delta: { type: "content_delta", index, content: { type: "text", text } } });
+
+test("streamed text prints chunk by chunk, and the final message isn't printed twice", () => {
+  const writes = [];
+  const s = textStream((t) => writes.push(t));
+  for (const e of [start("sevt_a"), delta("sevt_a", "Hel"), delta("sevt_a", "lo")]) assert.equal(s.handle(e), true);
+  assert.equal(s.handle({ id: "sevt_a", type: "agent.message", content: [{ type: "text", text: "Hello" }] }), true);
+  assert.deepEqual(writes, ["Hel", "lo", "\n"]);
+});
+
+test("text the deltas missed is printed when the final message arrives", () => {
+  const writes = [];
+  const s = textStream((t) => writes.push(t));
+  s.handle(start("sevt_b"));
+  s.handle(delta("sevt_b", "Hello"));
+  s.handle({ id: "sevt_b", type: "agent.message", content: [{ type: "text", text: "Hello, world" }] });
+  assert.equal(writes.join(""), "Hello, world\n");
+});
+
+test("an interrupted preview ends its line at model_request_end", () => {
+  const writes = [];
+  const s = textStream((t) => writes.push(t));
+  s.handle(start("sevt_c"));
+  s.handle(delta("sevt_c", "Partial"));
+  assert.equal(s.handle({ id: "sevt_x", type: "span.model_request_end" }), false);
+  assert.equal(writes.join(""), "Partial\n");
+});
+
+test("a message without a preview is left to the normal printer", () => {
+  const s = textStream(() => assert.fail("nothing should be written"));
+  assert.equal(s.handle({ id: "sevt_d", type: "agent.message", content: [{ type: "text", text: "hi" }] }), false);
+});
+
+test("run opts in to deltas and streams the reply into the terminal", async () => {
+  let params;
+  const api = fakeSessions((e, emit) => {
+    if (e.type === "user.message") {
+      emit(start("sevt_s"));
+      emit(delta("sevt_s", "Hi "));
+      emit(delta("sevt_s", "there"));
+      emit({ id: "sevt_s", type: "agent.message", content: [{ type: "text", text: "Hi there" }] });
+      emit(idle());
+    }
+  });
+  const original = api.client.beta.sessions.events.stream;
+  api.client.beta.sessions.events.stream = (sid, p) => ((params = p), original(sid, p));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let printed = "";
+  output.on("data", (d) => (printed += d));
+  input.end("hello\n");
+
+  await chat(api.client, { id: "sesn_1" }, { agentName: "Coding Assistant", input, output });
+  assert.deepEqual(params, { event_deltas: ["agent.message"] });
+  assert.equal(printed.split("Hi there").length, 2, "reply printed exactly once");
+});

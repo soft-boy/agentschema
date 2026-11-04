@@ -6,13 +6,13 @@ The tools Claude runs in the agent's container. Set Enabled to false to turn a t
 
 ## Tools
 
-| Name | Enabled | Permission |
-|---|---|---|
-| `bash` | `true` | |
-| `edit` | `true` | |
-| `glob` | `true` | |
-| `grep` | `true` | |
-| `read` | `true` | |
-| `web_fetch` | `true` | |
-| `web_search` | `true` | |
-| `write` | `true` | |
+| Name         | Enabled | Permission |
+| ------------ | ------- | ---------- |
+| `bash`       | `true`  | `auto`     |
+| `edit`       | `true`  | `auto`     |
+| `glob`       | `true`  | `auto`     |
+| `grep`       | `true`  | `auto`     |
+| `read`       | `true`  | `auto`     |
+| `web_fetch`  | `true`  | `auto`     |
+| `web_search` | `true`  | `auto`     |
+| `write`      | `true`  | `auto`     |

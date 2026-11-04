@@ -4,7 +4,8 @@
   "description": "Markdown based AI agent schema",
   "type": "module",
   "bin": {
-    "agentschema": "bin/agentschema.js"
+    "agentschema": "bin/agentschema.js",
+    "ags": "bin/agentschema.js"
   },
   "files": [
     "bin",

@@ -19,7 +19,7 @@ test("init --yes scaffolds a folder that passes check", async () => {
   const agent = readFileSync(join(dir, "agent.md"), "utf8");
   assert.match(agent, /^---\nname: Bug Triage\nmodel: claude-opus-5-5\n/);
   assert.doesNotMatch(agent, /tools/);
-  assert.equal(readFileSync(join(dir, "tools/built-in/bash.md"), "utf8"), "---\ntype: agent_toolset_20260401\n---\n");
+  assert.match(readFileSync(join(dir, "tools/agent_toolset_20260401.md"), "utf8"), /^---\ntype: agent_toolset_20260401\n---\n[\s\S]*\| `bash` \| `true` \| \|/);
   assert.match(readFileSync(join(dir, "env.md"), "utf8"), /name: bug-triage/);
 });
 
@@ -35,7 +35,7 @@ test("init uses the answers typed, by name or number", async () => {
   assert.equal(instance.agent.data.name, "Reviewer");
   assert.equal(instance.agent.data.model, "claude-sonnet-5-5");
   assert.equal(instance.agent.body, "You review pull requests.");
-  assert.equal(instance.tools.length, 8);
+  assert.equal(instance.tools[0].rows.length, 8);
   assert.equal(instance.env.data.name, "helper");
   assert.deepEqual(instance.env.data.config.networking, { type: "unrestricted" });
 });

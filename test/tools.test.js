@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runTool } from "../src/chat.js";
 import { check } from "../src/check.js";
 import { agentBody } from "../src/instance.js";
-import { AGENT_MD, ENV_MD, PREBUILT_MD, instance } from "./helpers.js";
+import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
 
 const READ_FILE_MD = `---
 type: custom
@@ -42,8 +42,7 @@ const errorsFor = (tools) => check(folder(tools)).errors;
 
 test("tools compile to one toolset entry, then custom tools, sorted by name", () => {
   const { errors, instance: inst } = check(folder({
-    "tools/web_search.md": PREBUILT_MD,
-    "tools/bash.md": PREBUILT_MD,
+    "tools/agent_toolset_20260401.md": toolset("web_search", "bash | true | always_ask", "read | false"),
     "tools/read_file.md": READ_FILE_MD,
     "tools/ask_user.md": READ_FILE_MD.replace("name: read_file", "name: ask_user"),
   }));
@@ -51,8 +50,11 @@ test("tools compile to one toolset entry, then custom tools, sorted by name", ()
   const { tools } = agentBody(inst);
   assert.deepEqual(tools[0], {
     type: "agent_toolset_20260401",
-    default_config: { enabled: false },
-    configs: [{ name: "bash", enabled: true }, { name: "web_search", enabled: true }],
+    configs: [
+      { name: "bash", enabled: true, permission_policy: { type: "always_ask" } },
+      { name: "read", enabled: false },
+      { name: "web_search", enabled: true },
+    ],
   });
   assert.deepEqual(tools.slice(1).map((t) => t.name), ["ask_user", "read_file"]);
   assert.deepEqual(tools[2].input_schema, {
@@ -76,10 +78,26 @@ test("tools in agent.md's frontmatter are an error", () => {
   assert.match(check(instance({ "agent.md": md, "env.md": ENV_MD })).errors[0], /define each tool as a file in tools\//);
 });
 
-test("pre-built tool files must be named after a pre-built tool and hold only a type", () => {
-  assert.match(errorsFor({ "tools/shell.md": PREBUILT_MD })[0], /tools\/shell\.md: not a pre-built tool/);
-  assert.match(errorsFor({ "tools/bash.md": "---\ntype: agent_toolset_20260401\nenabled: false\n---\n" })[0], /unknown field `enabled`/);
-  assert.match(errorsFor({ "tools/bash.md": "---\ntype: mcp_toolset\n---\n" })[0], /`type` must be/);
+test("the pre-built toolset file is checked", () => {
+  const errs = (md, file = "tools/agent_toolset_20260401.md") => errorsFor({ [file]: md }).join("\n");
+  assert.match(errs(toolset("shell")), /`shell` is not a pre-built tool/);
+  assert.match(errs(toolset("bash", "bash")), /`bash` is listed twice/);
+  assert.match(errs(toolset("bash | true | sometimes")), /permission `sometimes`/);
+  assert.match(errs(toolset("bash | yes")), /`bash`: Enabled must be true or false/);
+  assert.match(errs(toolset("bash |")), /`bash`: Enabled must be true or false/);
+  assert.match(errs(PREBUILT_MD.replace("---\n\n", "enabled: false\n---\n\n")), /unknown field `enabled`/);
+  assert.match(errs(PREBUILT_MD.replace("| Name | Enabled |", "| Name | On |")), /Tools table's columns/);
+  assert.match(errs("---\ntype: mcp_toolset\n---\n"), /`type` must be/);
+  // A 0.2.0-style file, one per tool with no table, points at the new layout.
+  assert.match(errs("---\ntype: agent_toolset_20260401\n---\n", "tools/bash.md"), /since 0\.2\.1 all pre-built tools go in one file/);
+  assert.match(errorsFor({ "tools/a.md": PREBUILT_MD, "tools/b.md": PREBUILT_MD })[0], /more than one `agent_toolset_20260401` file/);
+});
+
+test("the Permission column is optional", () => {
+  const md = "---\ntype: agent_toolset_20260401\n---\n\n## Tools\n\n| Name | Enabled |\n|---|---|\n| `read` | `true` |\n";
+  const { errors, instance: inst } = check(folder({ "tools/agent_toolset_20260401.md": md }));
+  assert.deepEqual(errors, []);
+  assert.deepEqual(agentBody(inst).tools[0].configs, [{ name: "read", enabled: true }]);
 });
 
 test("custom tools are checked", () => {
@@ -111,16 +129,16 @@ test("a tool that throws returns an error result; non-strings are sent as JSON",
 });
 
 test("subfolders only organize: the same tools compile whatever folder they're in", () => {
-  const flat = check(folder({ "tools/bash.md": PREBUILT_MD, "tools/read_file.md": READ_FILE_MD })).instance;
+  const flat = check(folder({ "tools/agent_toolset_20260401.md": PREBUILT_MD, "tools/read_file.md": READ_FILE_MD })).instance;
   const nested = check(folder({
-    "tools/built-in/bash.md": PREBUILT_MD,
+    "tools/config/toolset.md": PREBUILT_MD,
     "tools/files/io/read_file.md": READ_FILE_MD,
-    "tools/.drafts/web_search.md": PREBUILT_MD,
+    "tools/.drafts/other.md": toolset("web_search"),
   })).instance;
   assert.deepEqual(agentBody(nested).tools, agentBody(flat).tools);
 });
 
 test("two tools with the same name in different folders are an error", () => {
-  const errors = errorsFor({ "tools/built-in/bash.md": PREBUILT_MD, "tools/bash.md": PREBUILT_MD });
-  assert.match(errors[0], /more than one tool is named `bash` \(tools\/bash\.md, tools\/built-in\/bash\.md\)/);
+  const errors = errorsFor({ "tools/a/read_file.md": READ_FILE_MD, "tools/read_file.md": READ_FILE_MD });
+  assert.match(errors[0], /more than one tool is named `read_file` \(tools\/a\/read_file\.md, tools\/read_file\.md\)/);
 });

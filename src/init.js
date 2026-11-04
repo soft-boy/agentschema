@@ -3,7 +3,7 @@ import { basename, dirname, resolve } from "node:path";
 import { createInterface, emitKeypressEvents } from "node:readline";
 import { stringify } from "yaml";
 import { AGENT_FILE, ENV_FILE } from "./instance.js";
-import { BUILT_IN_DIR, PREBUILT_TOOLS, TOOLSET, TOOLS_DIR } from "./tools.js";
+import { TOOLSET_FILE, PREBUILT_TOOLS, TOOLSET, TOOLS_DIR } from "./tools.js";
 
 export class InitError extends Error {}
 
@@ -24,8 +24,8 @@ export function defaults(dir) {
   };
 }
 
-// Returns { path: text } for a set of answers: agent.md, env.md, and a tools/built-in/ file
-// for each pre-built tool when the agent gets them.
+// Returns { path: text } for a set of answers: agent.md, env.md, and tools/agent_toolset_20260401.md
+// listing every pre-built tool when the agent gets them.
 export function scaffold(answers) {
   const agent = { name: answers.name, model: answers.model };
 
@@ -41,9 +41,15 @@ export function scaffold(answers) {
     [ENV_FILE]: `---\n${stringify(env)}---\nCloud container with ${access}.\n`,
   };
   if (answers.tools) {
-    for (const name of PREBUILT_TOOLS) files[`${TOOLS_DIR}/${BUILT_IN_DIR}/${name}.md`] = `---\ntype: ${TOOLSET}\n---\n`;
+    files[`${TOOLS_DIR}/${TOOLSET_FILE}`] = builtInFile(PREBUILT_TOOLS);
   }
   return files;
+}
+
+// The pre-built toolset file, enabling `names` with the API's default permission policy.
+export function builtInFile(names) {
+  const rows = names.map((name) => `| \`${name}\` | \`true\` | |`).join("\n");
+  return `---\ntype: ${TOOLSET}\n---\n\nThe tools Claude runs in the agent's container. Set Enabled to false to turn a tool off.\n\n## Tools\n\n| Name | Enabled | Permission |\n|---|---|---|\n${rows}\n`;
 }
 
 // Asks the setup questions, then writes agent.md and env.md into a new folder `dir`.
@@ -61,7 +67,7 @@ export async function init(dir, { yes = false, input = process.stdin, output = p
     writeFileSync(resolve(dir, file), text);
   }
 
-  const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${BUILT_IN_DIR}/ with the pre-built tools (delete a file to disable that tool)` : "";
+  const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${TOOLSET_FILE} with the pre-built tools (set Enabled to false to turn one off)` : "";
   output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${ENV_FILE}${tools}.\n\nNext:\n`);
   output.write(`  agentschema deploy ${dir}\n  agentschema run ${dir}\n`);
   return files;

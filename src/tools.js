@@ -5,13 +5,15 @@ import { Script, runInThisContext } from "node:vm";
 import { FileError, parseMarkdown } from "./markdown.js";
 
 export const TOOLS_DIR = "tools";
-export const BUILT_IN_DIR = "built-in";
 export const TOOLSET = "agent_toolset_20260401";
+export const TOOLSET_FILE = `${TOOLSET}.md`;
 export const PREBUILT_TOOLS = ["bash", "edit", "glob", "grep", "read", "web_fetch", "web_search", "write"];
+export const POLICIES = ["always_allow", "always_ask", "auto"];
 const TYPES = ["string", "number", "integer", "boolean", "object", "array"];
 
 // Reads every .md file under tools/, in any subfolder, sorted by name. Folders are only for
-// organizing: a tool's name is its file name, and its path isn't compiled into anything.
+// organizing: a custom tool's name is its file name, and its path isn't compiled into anything.
+// The pre-built toolset is one file (by convention tools/agent_toolset_20260401.md) that lists its tools.
 // A missing tools/ folder means no tools.
 // Returns { tools, errors }; a tool file that can't be parsed has an entry in errors.
 export function readTools(dir) {
@@ -35,9 +37,13 @@ export function readTools(dir) {
     }
   }
 
-  // Names must be unique across folders, since the folders are dropped.
-  for (const [name, same] of groupBy(tools, (t) => t.name)) {
+  // Custom tool names must be unique across folders, since the folders are dropped.
+  for (const [name, same] of groupBy(tools.filter((t) => t.data.type === "custom"), (t) => t.name)) {
     if (same.length > 1) errors.push(`${TOOLS_DIR}: more than one tool is named \`${name}\` (${same.map((t) => t.file).join(", ")})`);
+  }
+  const toolsets = tools.filter((t) => t.data.type === TOOLSET);
+  if (toolsets.length > 1) {
+    errors.push(`${TOOLS_DIR}: more than one \`${TOOLSET}\` file (${toolsets.map((t) => t.file).join(", ")}); list every pre-built tool in one file`);
   }
   return { tools: tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)), errors };
 }
@@ -60,7 +66,8 @@ function groupBy(items, key) {
   return groups;
 }
 
-// Pulls the `## Input Schema` table and the `## Code` block out of a tool file's body.
+// Pulls the `## Input Schema` table, the `## Code` block and the `## Tools` table (for the
+// pre-built toolset) out of a tool file's body.
 function parseSections(body, file) {
   const sections = {};
   let current = null;
@@ -77,22 +84,29 @@ function parseSections(body, file) {
     }
   }
 
-  const result = { params: null, code: null };
-  if (sections["input schema"]) result.params = parseTable(sections["input schema"], file);
+  const result = { params: null, code: null, rows: null };
+  if (sections["input schema"]) {
+    result.params = parseTable(sections["input schema"], `${file}: the Input Schema table's columns must be Name | Type | Description | Required`,
+      ["name", "type", "description", "required"]);
+  }
   if (sections.code) result.code = parseCode(sections.code, file);
+  if (sections.tools) {
+    result.rows = parseTable(sections.tools, `${file}: the Tools table's columns must be Name | Enabled, or Name | Enabled | Permission`, ["name", "enabled"], ["permission"]);
+  }
   return result;
 }
 
-// Rows of the Name | Type | Description | Required table.
-function parseTable(lines, file) {
+// The rows of a Markdown table as objects keyed by column name. The header must start with
+// the `required` columns, and may go on with the `optional` ones, in order.
+function parseTable(lines, message, required, optional = []) {
   const rows = lines.filter((l) => l.trim().startsWith("|")).map(splitRow);
   if (rows.length === 0) return [];
   const header = rows[0].map((c) => c.toLowerCase());
-  const want = ["name", "type", "description", "required"];
-  if (want.some((c, i) => header[i] !== c)) {
-    throw new FileError(`${file}: the Input Schema table's columns must be Name | Type | Description | Required`);
+  const allowed = [...required, ...optional];
+  if (header.length < required.length || header.length > allowed.length || header.some((c, i) => c !== allowed[i])) {
+    throw new FileError(message);
   }
-  return rows.slice(2).map(([name, type, description, required]) => ({ name, type, description, required }));
+  return rows.slice(2).map((cells) => Object.fromEntries(header.map((c, i) => [c, cells[i] ?? ""])));
 }
 
 function splitRow(line) {
@@ -121,15 +135,31 @@ export function checkTools(tools, errors) {
     };
 
     if (type === TOOLSET) {
-      if (!PREBUILT_TOOLS.includes(tool.name)) {
-        err(`not a pre-built tool; name the file after one of: ${PREBUILT_TOOLS.join(", ")}`);
-      }
+      checkToolset(tool, err);
       extra(["type"]);
     } else if (type === "custom") {
       checkCustom(tool, err);
       extra(["type", "name", "description"]);
     } else {
       err(`\`type\` must be \`${TOOLSET}\` (a pre-built tool) or \`custom\``);
+    }
+  }
+}
+
+function checkToolset(tool, err) {
+  if (!tool.rows) {
+    // 0.2.0 had one file per pre-built tool, with no table.
+    const hint = PREBUILT_TOOLS.includes(tool.name) ? `; since 0.2.1 all pre-built tools go in one file, ${TOOLS_DIR}/${TOOLSET_FILE}` : "";
+    return err(`a \`## Tools\` table listing the pre-built tools to enable is required${hint}`);
+  }
+  const seen = new Set();
+  for (const row of tool.rows) {
+    if (!PREBUILT_TOOLS.includes(row.name)) err(`\`${row.name}\` is not a pre-built tool; use ${PREBUILT_TOOLS.join(", ")}`);
+    else if (seen.has(row.name)) err(`\`${row.name}\` is listed twice`);
+    seen.add(row.name);
+    if (!["true", "false"].includes(row.enabled.toLowerCase())) err(`\`${row.name}\`: Enabled must be true or false`);
+    if (row.permission && !POLICIES.includes(row.permission)) {
+      err(`\`${row.name}\` has permission \`${row.permission}\`; use ${POLICIES.join(", ")}, or leave it blank`);
     }
   }
 }
@@ -164,16 +194,20 @@ function checkCustom(tool, err) {
   }
 }
 
-// The tools list sent to the API: one toolset entry that enables only the pre-built tools
-// with a file (so deleting a file disables the tool), then the custom tools, sorted by name.
+// The tools list sent to the API: one toolset entry with a config for each row of its table
+// (tools it doesn't list keep the API's defaults), then the custom tools, sorted by name.
 export function compileTools(tools) {
   const compiled = [];
-  const prebuilt = tools.filter((t) => t.data.type === TOOLSET).map((t) => t.name).sort();
-  if (prebuilt.length > 0) {
+  const toolset = tools.find((t) => t.data.type === TOOLSET);
+  if (toolset) {
+    const rows = [...(toolset.rows ?? [])].sort((a, b) => (a.name < b.name ? -1 : 1));
     compiled.push({
       type: TOOLSET,
-      default_config: { enabled: false },
-      configs: prebuilt.map((name) => ({ name, enabled: true })),
+      configs: rows.map(({ name, enabled, permission }) => {
+        const config = { name, enabled: enabled.toLowerCase() === "true" };
+        if (permission) config.permission_policy = { type: permission };
+        return config;
+      }),
     });
   }
   for (const tool of tools.filter((t) => t.data.type === "custom").sort((a, b) => (a.name < b.name ? -1 : 1))) {

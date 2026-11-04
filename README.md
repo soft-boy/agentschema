@@ -4,22 +4,20 @@ Define an AI-Agent as a folder of Markdown files.
 
 ```
 my-agent/
-├── agent.md        # the agent
-├── env.md          # the environment it runs in
-└── tools/          # one file per tool, in any folders you like
-    ├── built-in/
-    │   ├── bash.md
-    │   └── read.md
+├── agent.md                      # the agent
+├── env.md                        # the environment it runs in
+└── tools/                        # tool files, in any folders you like
+    ├── agent_toolset_20260401.md # the pre-built tools to enable
     └── get_weather.md
 ```
 
-**Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
+**Status:** v0.2.1 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
 
 ## Philosophy
 
 1. **One folder, one agent.** A folder defines one agent and the one environment it runs in. Sessions, credentials, mounted files and repositories, and schedules are supplied by whatever runs the agent.
 2. **Everything is a Markdown file.** An agent is plain files you can read, diff, review and version like any other code. Structured settings go in YAML frontmatter, and prose the model reads goes in the Markdown body.
-3. **Inspired by Claude Managed Agents, not tied to it.** `agent.md` and `env.md` use the Claude Managed Agents fields because they're a well-documented vocabulary for agents. Tools are the exception: each one is its own file, and agentschema compiles them into the API's format. The format itself assumes no particular infrastructure, so any runtime that can read the files can run the agent.
+3. **Inspired by Claude Managed Agents, not tied to it.** `agent.md` and `env.md` use the Claude Managed Agents fields because they're a well-documented vocabulary for agents. Tools are the exception: they're split into their own files, and agentschema compiles them into the API's format. The format itself assumes no particular infrastructure, so any runtime that can read the files can run the agent.
 
 ## Install
 
@@ -35,12 +33,10 @@ An instance is a folder of Markdown files. `agent.md` and `env.md` are required.
 
 ```
 my-agent/
-├── agent.md        # the agent
-├── env.md          # the environment (computer)
-└── tools/          # one file per tool, nested however you like
-    ├── built-in/
-    │   ├── bash.md
-    │   └── read.md
+├── agent.md                      # the agent
+├── env.md                        # the environment (computer)
+└── tools/                        # tool files, nested however you like
+    ├── agent_toolset_20260401.md # the pre-built tools to enable
     └── get_weather.md
 ```
 
@@ -59,19 +55,30 @@ Field reference: [Environments](https://platform.claude.com/docs/en/managed-agen
 
 ### `tools/`
 
-Each `.md` file in `tools/` is one tool, and the file name is the tool's name. agentschema supports two kinds: pre-built and custom.
+Each `.md` file in `tools/` is either the pre-built toolset or one custom tool.
 
-Subfolders are only for organizing. Every `.md` file under `tools/`, at any depth, is a tool, and its folder is ignored when compiling: moving a file between folders changes nothing that's deployed. Because the folders are dropped, two tools can't share a name even in different folders. Folders and files whose names start with `.` are skipped. By convention, the pre-built tools go in `tools/built-in/`.
+Subfolders are only for organizing. Every `.md` file under `tools/`, at any depth, is read, and its folder is ignored when compiling: moving a file between folders changes nothing that's deployed. Because the folders are dropped, two custom tools can't share a name even in different folders. Folders and files whose names start with `.` are skipped.
 
-**Pre-built tools** are the tools Claude Managed Agents runs in the container: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search` and `write`. Name the file after the tool (for example `tools/built-in/bash.md`), and give it only a `type`:
+**Pre-built tools** are the tools Claude Managed Agents runs in the container: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search` and `write`. One file lists the ones the agent gets. By convention it's `tools/agent_toolset_20260401.md`, but the file name isn't used:
 
 ```markdown
 ---
 type: agent_toolset_20260401
 ---
+
+## Tools
+
+| Name | Enabled | Permission |
+|---|---|---|
+| `bash` | `true` | `always_ask` |
+| `read` | `true` | |
+| `web_search` | `false` | |
 ```
 
-Only the pre-built tools that have a file are enabled; delete a file to disable that tool. The body is a note for people and isn't sent anywhere.
+- **Frontmatter** is only `type: agent_toolset_20260401`.
+- **`## Tools`** has a row for each tool you configure. **Enabled** is `true` or `false`. A tool without a row keeps the API's default, which is enabled. With no file at all, the agent gets no pre-built tools.
+- **Permission** is `always_allow`, `always_ask` or `auto`. Leave the cell blank for the API's default (`always_allow`), or leave out the column entirely.
+- There can be only one such file. Other sections are notes for people.
 
 **Custom tools** run on your side: when the agent calls one, `agentschema run` runs its code on your machine and sends back the result.
 
@@ -101,7 +108,7 @@ module.exports = ({ city }) =>
 - **`## Code`** is required, and must be one JavaScript code block. It's a CommonJS module, and `module.exports` is the function. It's called with the call's input as an object. A string it returns (or resolves to) is sent as the result; anything else is sent as JSON. If it throws, the error message is sent as an error result. `require()` resolves from the tool's file, so packages installed in the agent folder work.
 - Other sections are notes for people.
 
-**Compiling.** `deploy` turns `tools/` into the agent's `tools` list, sorted by tool name: one `agent_toolset_20260401` entry with `default_config: { enabled: false }` and a config enabling each pre-built tool with a file, then the custom tools. A custom tool sends only its name, description and input schema; the code never leaves your machine.
+**Compiling.** `deploy` turns `tools/` into the agent's `tools` list, sorted by tool name: one `agent_toolset_20260401` entry with a config for each row of the `## Tools` table (its `enabled`, and its `permission_policy` if it has one), then the custom tools. A custom tool sends only its name, description and input schema; the code never leaves your machine.
 
 ## Usage
 
@@ -121,7 +128,7 @@ agentschema sessions delete <id>      # delete a session
 **`init`** creates the folder `<name>` with an `agent.md` and an `env.md` that pass `check`. It asks for:
 - the agent's name and model
 - its system prompt
-- whether it gets the pre-built tools; if so, `init` writes a file for each one in `tools/built-in/`
+- whether it gets the pre-built tools; if so, `init` writes `tools/agent_toolset_20260401.md` listing all eight
 - the environment's name and networking
 
 Press Enter to keep the default shown, or pass `--yes` to skip the questions. `init` won't write into a folder that already has files in it.
@@ -130,7 +137,7 @@ Press Enter to keep the default shown, or pass `--yes` to skip the questions. `i
 - a missing file, or a name that isn't lowercase
 - frontmatter that is missing, unclosed, or invalid YAML
 - a missing `name` or `model`, or a `system` or `tools` key in `agent.md`'s frontmatter
-- a tool file that isn't a known pre-built tool, or a custom tool with a missing description, a malformed input table, or code that isn't JavaScript or doesn't parse
+- a pre-built tools table that names an unknown tool or permission, or a custom tool with a missing description, a malformed input table, or code that isn't JavaScript or doesn't parse
 - values over the API's limits
 - anything that looks like an API key or token
 

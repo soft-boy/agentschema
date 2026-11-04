@@ -21,7 +21,7 @@ test("the body becomes the system prompt", () => {
   assert.deepEqual(agentBody(inst), {
     name: "Coding Assistant",
     model: "claude-opus-5-5",
-    tools: [{ type: "agent_toolset_20260401", default_config: { enabled: false }, configs: [{ name: "bash", enabled: true }] }],
+    tools: [{ type: "agent_toolset_20260401", configs: [{ name: "bash", enabled: true }] }],
     system: "You are a helpful coding assistant.",
   });
 });

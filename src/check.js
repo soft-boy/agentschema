@@ -1,4 +1,5 @@
 import { AGENT_FILE, ENV_FILE, readInstance } from "./instance.js";
+import { MAX_UPLOAD_BYTES, SKILLS_DIR, readSkills } from "./skills.js";
 import { MCP_TOOLSET, TOOLS_DIR, checkTools, readTools } from "./tools.js";
 import { CREDENTIAL_TYPES, ENV_VAR, SECRET_FIELDS, TOKEN_ENDPOINT_AUTH, VAULT_FILE, get, readVaults } from "./vaults.js";
 
@@ -24,7 +25,8 @@ export function check(dir) {
   const { agent, env, errors } = readInstance(dir);
   const { tools, errors: toolErrors } = readTools(dir);
   const { vaults, errors: vaultErrors } = readVaults(dir);
-  errors.push(...toolErrors, ...vaultErrors);
+  const { skills, errors: skillErrors } = readSkills(dir);
+  errors.push(...toolErrors, ...vaultErrors, ...skillErrors);
   const warnings = [];
 
   if (agent) checkAgent(agent, errors, warnings);
@@ -32,18 +34,22 @@ export function check(dir) {
   checkTools(tools, errors);
   if (agent) checkMcpServers(agent, tools, errors);
   if (agent && env) checkMcpNetworking(agent, env, warnings);
+  for (const skill of skills) checkSkill(skill, errors);
+  const declaredSkills = Array.isArray(agent?.data.skills) ? agent.data.skills.length : 0;
+  if (declaredSkills + skills.length > 500) errors.push(`${declaredSkills + skills.length} skills; the limit is 500`);
   for (const vault of vaults) checkVault(vault, errors, warnings);
   checkEnvVarCredentials(vaults, env, warnings);
 
   const vaultFiles = vaults.flatMap((v) => [...(v.file ? [[`${v.path}/${VAULT_FILE}`, v.file]] : []), ...v.credentials.map((c) => [c.file, c])]);
-  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env], ...tools.map((t) => [t.file, t]), ...vaultFiles]) {
+  const skillTexts = skills.flatMap((s) => s.files.map((f) => [`${s.path}/${f.rel}`, { raw: f.bytes.toString("utf8") }]));
+  for (const [file, parsed] of [[AGENT_FILE, agent], [ENV_FILE, env], ...tools.map((t) => [t.file, t]), ...vaultFiles, ...skillTexts]) {
     if (!parsed) continue;
     for (const [pattern, what] of SECRET_PATTERNS) {
       if (pattern.test(parsed.raw)) errors.push(`${file}: looks like it contains ${what}; keep secrets out of these files`);
     }
   }
 
-  return { errors, warnings, instance: agent && env ? { agent, env, tools, vaults } : null };
+  return { errors, warnings, instance: agent && env ? { agent, env, tools, vaults, skills } : null };
 }
 
 function checkAgent({ data, body }, errors, warnings) {
@@ -71,6 +77,10 @@ function checkAgent({ data, body }, errors, warnings) {
     if (data[field] === undefined) continue;
     if (!Array.isArray(data[field])) err(`\`${field}\` must be a list`);
     else if (data[field].length > max) err(`\`${field}\` has ${data[field].length} entries; the limit is ${max}`);
+  }
+
+  if (Array.isArray(data.skills)) {
+    for (const [index, skill] of data.skills.entries()) checkSkillRef(skill, (msg) => err(`\`skills[${index}]\`: ${msg}`));
   }
 
   checkMetadata(data.metadata, 16, err);
@@ -108,6 +118,38 @@ function checkEnv({ data }, errors, warnings) {
   for (const key of Object.keys(data)) {
     if (!ENV_FIELDS.has(key)) warnings.push(`${ENV_FILE}: unknown field \`${key}\` will be sent to the API as written`);
   }
+}
+
+// An entry in agent.md's `skills` list, in the API's shape.
+function checkSkillRef(skill, err) {
+  if (typeof skill === "string") {
+    return err(`write this as a mapping with \`type\` and \`skill_id\`; a skill in ${SKILLS_DIR}/ is attached without being listed`);
+  }
+  if (!isObject(skill)) return err("must be a mapping with `type` and `skill_id`");
+  if (!["anthropic", "custom"].includes(skill.type)) err("`type` must be `anthropic` or `custom`");
+  if (typeof skill.skill_id !== "string" || skill.skill_id === "") err("`skill_id` is required");
+  else if (skill.type === "custom" && !skill.skill_id.startsWith("skill_")) err("a custom skill's `skill_id` starts with skill_");
+  if (skill.version !== undefined && skill.version !== null && typeof skill.version !== "string") {
+    err("`version` must be a string (quote numbers)");
+  }
+}
+
+function checkSkill(skill, errors) {
+  const err = (msg) => errors.push(`${skill.file}: ${msg}`);
+  const { name, description } = skill.data;
+  if (typeof name !== "string" || name === "") err("`name` is required");
+  else {
+    if (name !== skill.name) err(`\`name\` must match the folder's name (${skill.name})`);
+    if (!/^[a-z0-9-]{1,64}$/.test(name)) err("`name` may only use lowercase letters, digits and hyphens, up to 64 characters");
+    if (/anthropic|claude/.test(name)) err("`name` can't contain the reserved words `anthropic` or `claude`");
+  }
+  if (typeof description !== "string" || description.trim() === "") err("`description` is required");
+  else {
+    if (description.length > 1024) err(`\`description\` is ${description.length} characters; the limit is 1,024`);
+    if (/<[^>]+>/.test(description)) err("`description` can't contain XML tags");
+  }
+  const size = skill.files.reduce((total, f) => total + f.bytes.length, 0);
+  if (size > MAX_UPLOAD_BYTES) errors.push(`${skill.path}: its files add up to ${Math.ceil(size / 1024 / 1024)} MB; the limit is 30 MB`);
 }
 
 const mcpServers = (agent) => (Array.isArray(agent.data.mcp_servers) ? agent.data.mcp_servers.filter(isObject) : []);

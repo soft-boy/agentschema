@@ -25,7 +25,7 @@ const USAGE = `Usage: agentschema <command> [dir] [options]
 Commands:
   init <name>           Scaffold a new agent folder, asking a few questions
   check [dir]           Validate the folder's files, without calling the API
-  deploy [dir]          Create or update the agent, environment and vaults, and write claude-lock.json
+  deploy [dir]          Create or update the skills, agent, environment and vaults, and write claude-lock.json
   run [dir]             Chat with the deployed agent in a new session, loading dir/.env for your tools
   list                  List the agents in your workspace
   delete <agent_id>     Archive an agent (agents can't be deleted outright)

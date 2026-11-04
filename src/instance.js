@@ -41,9 +41,11 @@ export function readInstance(dir) {
 }
 
 // The bodies sent to POST /v1/agents and POST /v1/environments.
-// The agent's tools come from tools/, compiled into the API's `tools` list.
-export function agentBody({ agent, tools }) {
+// The agent's tools come from tools/, compiled into the API's `tools` list. `skills` are the
+// references to the skills deployed from skills/, added to any in agent.md's frontmatter.
+export function agentBody({ agent, tools }, skills = []) {
   const body = { ...agent.data, tools: compileTools(tools) };
+  if (skills.length > 0) body.skills = [...(agent.data.skills ?? []), ...skills];
   if (agent.body) body.system = agent.body;
   return body;
 }

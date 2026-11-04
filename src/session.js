@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { check } from "./check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
 import { LOCK_FILE, hashBody, readLock } from "./lock.js";
+import { skillFingerprint, skillKey, skillRefs } from "./skills.js";
 import { TOOLS_DIR } from "./tools.js";
 import { credentialKey, vaultKey } from "./vaults.js";
 
@@ -26,7 +27,12 @@ export async function openSession(dir, { client, sessionId }) {
   const notes = [];
   const { instance, errors } = check(dir);
   if (instance && errors.length === 0) {
-    if (hashBody(agentBody(instance)) !== agent.hash) notes.push(`${AGENT_FILE} or ${TOOLS_DIR}/ has changed since the last deploy`);
+    if (hashBody(agentBody(instance, skillRefs(instance.skills, lock))) !== agent.hash) {
+      notes.push(`${AGENT_FILE} or ${TOOLS_DIR}/ has changed since the last deploy`);
+    }
+    for (const skill of instance.skills) {
+      if (hashBody(skillFingerprint(skill)) !== lock.resources[skillKey(skill)]?.hash) notes.push(`${skill.path} has changed since the last deploy`);
+    }
     if (hashBody(envBody(instance)) !== env.hash) notes.push(`${ENV_FILE} has changed since the last deploy`);
     if (notes.length > 0) notes.push(`this session uses the deployed version; run agentschema deploy to pick up the changes`);
   }

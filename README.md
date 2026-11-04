@@ -9,6 +9,9 @@ my-agent/
 ├── tools/                        # tool files, in any folders you like
 │   ├── agent_toolset_20260401.md # the pre-built tools to enable
 │   └── get_weather.md
+├── skills/                       # instructions the agent loads when a task needs them
+│   └── code-review/
+│       └── SKILL.md
 └── vaults/                       # credentials for MCP servers and API keys
     └── Ops/                      # a vault, named after its folder
         └── Slack.md              # a credential, without its secrets
@@ -43,6 +46,10 @@ my-agent/
 ├── tools/                        # tool files, nested however you like
 │   ├── agent_toolset_20260401.md # the pre-built tools to enable
 │   └── get_weather.md
+├── skills/                       # optional: one folder per skill
+│   └── code-review/
+│       ├── SKILL.md
+│       └── checklist.md          # any other files the skill needs
 └── vaults/                       # optional: one folder per vault
     └── Ops/
         ├── vault.md              # optional: the vault's metadata
@@ -154,6 +161,27 @@ module.exports = ({ city }) =>
 
 **Compiling.** `deploy` turns `tools/` into the agent's `tools` list, sorted by tool name: one `agent_toolset_20260401` entry with a config for each row of the `## Tools` table (its `enabled`, and its `permission_policy` if it has one), then an `mcp_toolset` entry for each MCP toolset file, then the custom tools. A custom tool sends only its name, description and input schema; the code never leaves your machine.
 
+### `skills/`
+Field reference: [Skills](https://platform.claude.com/docs/en/managed-agents/skills).
+
+Skills are instructions, and optionally scripts or reference files, that the agent loads only when a task calls for them. Each folder in `skills/` is one skill, following the standard layout: a `SKILL.md`, plus any other files it needs, at any depth.
+
+```markdown
+---
+name: code-review
+description: Review code for bugs, security problems and missing tests. Use when asked to review a change.
+---
+
+Read `checklist.md`, then go through the change one file at a time.
+```
+
+- **`name`** is required, and must match the folder's name. It may use lowercase letters, digits and hyphens, up to 64 characters, and can't contain `anthropic` or `claude`.
+- **`description`** is required, up to 1,024 characters, with no XML tags. The agent reads it to decide when to load the skill. Other frontmatter fields are left as written.
+- **Files:** hidden files and `node_modules` aren't uploaded. A skill's files can add up to 30 MB.
+- **Everything in the folder is uploaded to Anthropic,** so keep secrets out. `check` scans these files too.
+
+Every skill in the folder is attached to the agent. To use Anthropic's pre-built skills, or a skill that already exists in your workspace, list it under `skills` in `agent.md`'s frontmatter, as in the API; `deploy` adds the folder's skills to that list.
+
 ### `vaults/`
 Field reference: [Vaults](https://platform.claude.com/docs/en/managed-agents/vaults).
 
@@ -211,7 +239,7 @@ auth:
 ```sh
 agentschema init <name>               # scaffold a new agent folder
 agentschema check [dir]               # validate the folder, no network
-agentschema deploy [dir]              # create or update the agent, environment and vaults
+agentschema deploy [dir]              # create or update the skills, agent, environment and vaults
 agentschema run [dir]                 # chat with the deployed agent in the terminal
 agentschema list                      # list the agents in your workspace
 agentschema delete <agent_id>         # archive an agent
@@ -239,16 +267,18 @@ Press Enter to keep the default shown, or pass `--yes` to skip the questions. `i
 - frontmatter that is missing, unclosed, or invalid YAML
 - a missing `name` or `model`, or a `system` or `tools` key in `agent.md`'s frontmatter
 - a pre-built tools table that names an unknown tool or permission, an MCP server without both its entry in `agent.md` and its toolset file, or a custom tool with a missing description, a malformed input table, or code that isn't JavaScript or doesn't parse
+- a skill with no `SKILL.md`, or a `name` or `description` the API would reject
 - a credential file with a secret in it, a missing field, or two credentials for the same server
 - values over the API's limits
 - anything that looks like an API key or token
 
 Unknown fields are only warnings, because they're sent to the API as written. `check` exits with status 1 when there are errors.
 
-**`deploy`** runs `check` first, then creates or updates the environment, the agent and the vaults, and records their IDs in `claude-lock.json` in the folder. Commit that file.
+**`deploy`** runs `check` first, then creates or updates the skills, the environment, the agent and the vaults, and records their IDs in `claude-lock.json` in the folder. Commit that file.
 - **Later runs update the same resources.** A file that hasn't changed since the last deploy is skipped. Each change to `agent.md` or `tools/` adds a new version of the agent, and sessions already running keep the version they started on.
 - **The files are the source of truth.** A field you delete from a file is cleared on the next deploy, rather than left at its old value.
 - **Changes made elsewhere aren't overwritten silently.** If the agent was changed outside the folder since the last deploy, `deploy` stops; `--force` overwrites it.
+- **A changed skill gets a new version.** Any change to a skill's files uploads the whole folder as a new version. The agent is pinned to skill versions, so that also adds a new version of the agent, and sessions already running keep what they started on. Deleting a skill's folder detaches it from the agent, but the skill stays in your workspace until you delete it in the Console. Renaming the folder creates a new skill.
 - **Credentials are updated, not created.** Creating a credential needs its secrets, which aren't in the files, so `deploy` lists each credential file that has no credential yet, with the `cred deploy` command to run. It updates the settings of credentials that exist.
 
 `claude-lock.json` uses the same layout as `ant apply`'s, so `deploy` updates resources that `ant apply` created. The two tools hash files differently, though, so the first `deploy` after an `ant apply` updates both resources even if nothing changed.

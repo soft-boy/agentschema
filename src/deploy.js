@@ -1,14 +1,15 @@
 import { join } from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { check } from "./check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
 import { LOCK_FILE, hashBody, readLock, writeLock } from "./lock.js";
+import { skillFingerprint, skillKey, skillRefs } from "./skills.js";
 import { ENV_VAR, changedImmutableFields, credentialKey, credentialSettings, vaultBody, vaultKey } from "./vaults.js";
 
 export class DeployError extends Error {}
 
-// Creates or updates the environment, agent and vaults a folder defines, recording their IDs
-// in claude-lock.json. Credentials are only updated here: creating one needs its secrets, so
+// Creates or updates the skills, environment, agent and vaults a folder defines, recording their
+// IDs in claude-lock.json. Skills go first, because the agent refers to their IDs and versions. Credentials are only updated here: creating one needs its secrets, so
 // that's `cred deploy`'s job.
 // Returns the plan: one { file, kind, action, id, version } entry per resource.
 export async function deploy(dir, { client, dryRun = false, force = false, log = () => {} }) {
@@ -16,9 +17,18 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
   if (errors.length > 0) throw new DeployError(`check failed:\n  ${errors.join("\n  ")}`);
   const lock = openLock(dir, client);
 
+  const skillSteps = await deploySkills(instance.skills, { dir, client, lock, dryRun, log });
+  // A dry run has no new IDs or versions yet, so a stand-in shows that the agent will change too.
+  const pending = dryRun ? skillSteps.filter((s) => s.action !== "unchanged") : [];
+  const refs = instance.skills.flatMap((skill) => {
+    const step = pending.find((s) => s.key === skillKey(skill));
+    if (!step) return skillRefs([skill], lock);
+    return [{ type: "custom", skill_id: step.entry?.id ?? `pending:${skill.name}`, version: `pending:${step.hash}` }];
+  });
+
   const steps = [
     { file: ENV_FILE, kind: "environment", body: envBody(instance) },
-    { file: AGENT_FILE, kind: "agent", body: agentBody(instance) },
+    { file: AGENT_FILE, kind: "agent", body: agentBody(instance, refs) },
   ];
   for (const step of steps) {
     step.key = `./${step.file}`;
@@ -51,7 +61,7 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
 
   const vaultSteps = await deployVaults(dir, instance.vaults, { client, lock, dryRun, log });
 
-  return [...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
+  return [...skillSteps, ...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
     file, kind, action,
     id: lock.resources[key]?.id,
     version: lock.resources[key]?.version,
@@ -69,6 +79,36 @@ export function openLock(dir, client) {
     );
   }
   return lock;
+}
+
+// Uploads each skill that's new or changed. A change uploads the whole folder as a new version.
+async function deploySkills(skills, { dir, client, lock, dryRun, log }) {
+  const steps = [];
+  for (const skill of skills) {
+    const step = planStep(lock, { file: skill.path, key: skillKey(skill), kind: "skill", body: skillFingerprint(skill) });
+    steps.push(step);
+    if (dryRun || step.action === "unchanged") {
+      log(`${step.action.padEnd(9)} ${step.kind} ${step.entry?.id ?? skill.name}`);
+      continue;
+    }
+
+    // The API keeps a skill's layout from these names, so each one starts with its folder.
+    const files = await Promise.all(skill.files.map((f) => toFile(f.bytes, `${skill.name}/${f.rel}`)));
+    let id;
+    let version;
+    if (step.action === "create") {
+      const created = await call(step, () => client.skills.create({ files }));
+      ({ id, latest_version_id: version } = created);
+    } else {
+      ({ id } = step.entry);
+      await retrieve(step, () => client.skills.retrieve(id));
+      ({ id: version } = await call(step, () => client.skills.versions.create(id, { files })));
+    }
+    lock.resources[step.key] = { kind: "skill", id, version, hash: step.hash };
+    writeLock(dir, lock);
+    log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} skill ${id} (version ${version})`);
+  }
+  return steps;
 }
 
 // Creates or updates each vault, then updates the settings of credentials already created.

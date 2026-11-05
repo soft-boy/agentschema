@@ -285,3 +285,50 @@ test("cred create warns when the environment blocks the variable's host, and can
   assert.deepEqual(auth.injection_location, { header: true, body: true });
   assert.equal(auth.secret_value, "key_1");
 });
+
+test("the library can register under its own name, and manage credentials on a lock object", async () => {
+  const { authorizationRequest, createCredential, deleteCredential, discover, exchangeCode, registerClient } = await import("../src/node.js");
+  assert.equal(typeof discover, "function");
+  assert.equal(typeof authorizationRequest, "function");
+  assert.equal(typeof exchangeCode, "function");
+
+  let registered;
+  const fakeFetch = async (url, init) => {
+    registered = JSON.parse(init.body);
+    return new Response(JSON.stringify({ client_id: "abc" }), { status: 201 });
+  };
+  await registerClient("https://auth.example/register", "https://app.example/callback", { fetch: fakeFetch, clientName: "Agentbook" });
+  assert.equal(registered.client_name, "Agentbook");
+  await registerClient("https://auth.example/register", "https://app.example/callback", { fetch: fakeFetch });
+  assert.equal(registered.client_name, "agentschema");
+
+  const calls = [];
+  const client = {
+    beta: {
+      vaults: {
+        create: async (body) => (calls.push(["vault", body]), { id: "vlt_1" }),
+        credentials: {
+          create: async (vaultId, body) => (calls.push(["create", vaultId, body]), { id: "cred_1" }),
+          delete: async (id, options) => calls.push(["delete", id, options]),
+        },
+      },
+    },
+  };
+  const vault = { name: "secrets", path: "vaults/secrets", file: null };
+  const cred = { file: "vaults/secrets/key.md", name: "key", data: { auth: { type: "environment_variable", secret_name: "API_KEY" } } };
+  const lock = { version: 1, resources: {} };
+  const saved = [];
+
+  await createCredential({ lock, vault, cred, secrets: { secretValue: "shh" }, client, saveLock: async (next) => saved.push(structuredClone(next)) });
+  assert.deepEqual(calls.map((c) => c[0]), ["vault", "create"]);
+  assert.equal(calls[1][2].auth.secret_value, "shh");
+  assert.equal(lock.resources["./vaults/secrets/key.md"].id, "cred_1");
+  assert.equal(saved.length, 2);
+  assert.ok(!JSON.stringify(saved).includes("shh"));
+
+  await deleteCredential({ lock, cred, client });
+  assert.deepEqual(calls.at(-1), ["delete", "cred_1", { vault_id: "vlt_1" }]);
+  assert.equal(lock.resources["./vaults/secrets/key.md"], undefined);
+  await deleteCredential({ lock, cred, client });
+  assert.equal(calls.filter((c) => c[0] === "delete").length, 1);
+});

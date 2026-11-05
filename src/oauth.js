@@ -117,14 +117,14 @@ export async function startCallbackServer(port = 0) {
 
 const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-// Registers agentschema as an OAuth client (RFC 7591), for servers that allow it.
-// Returns { clientId, clientSecret, authMethod }.
-export async function registerClient(registrationEndpoint, redirectUri, { fetch = globalThis.fetch } = {}) {
+// Registers as an OAuth client (RFC 7591), for servers that allow it. `clientName` is what the
+// provider shows on its sign-in page. Returns { clientId, clientSecret, authMethod }.
+export async function registerClient(registrationEndpoint, redirectUri, { fetch = globalThis.fetch, clientName = "agentschema" } = {}) {
   const res = await fetch(registrationEndpoint, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
-      client_name: "agentschema",
+      client_name: clientName,
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],

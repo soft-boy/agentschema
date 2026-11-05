@@ -51,7 +51,7 @@ export async function credPaste(path, { client, ask, log = () => {} }) {
   };
   if (cred.data.auth.type === ENV_VAR) {
     const secretValue = await required(`Value of ${cred.data.auth.secret_name}: `);
-    return createCredential({ dir, lock, vault, cred }, { secretValue }, { client, log });
+    return createCredential({ lock, vault, cred, secrets: { secretValue }, client, saveLock: (next) => writeLock(dir, next), log });
   }
   const secrets = { accessToken: await required("Access token: ") };
   const expiresAt = (await ask("Access token expires at (ISO 8601, e.g. 2026-12-31T23:59:59Z; blank if unknown): ", { secret: false })).trim();
@@ -62,19 +62,20 @@ export async function credPaste(path, { client, ask, log = () => {} }) {
   if (needs.refreshToken) secrets.refreshToken = await required("Refresh token: ");
   if (needs.clientSecret) secrets.clientSecret = await required("Client secret: ");
 
-  return createCredential({ dir, lock, vault, cred }, secrets, { client, log });
+  return createCredential({ lock, vault, cred, secrets, client, saveLock: (next) => writeLock(dir, next), log });
 }
 
 // Creates a credential with its secrets, creating its vault first if needed, records it in the
-// lock, and asks the API to try it.
-async function createCredential({ dir, lock, vault, cred }, secrets, { client, log }) {
+// lock, and asks the API to try it. `secrets` are what credentialCreateBody takes. Works on a lock
+// object, so a host can keep it wherever it likes, and `saveLock` may be async.
+export async function createCredential({ lock, vault, cred, secrets, client, saveLock = () => {}, log = () => {} }) {
   let vaultId = lock.resources[vaultKey(vault)]?.id;
   if (!vaultId) {
     const body = vaultBody(vault);
     const created = await call({ file: vault.path, kind: "vault" }, () => client.beta.vaults.create(body));
     vaultId = created.id;
     lock.resources[vaultKey(vault)] = { kind: "vault", id: vaultId, hash: hashBody(body) };
-    writeLock(dir, lock);
+    await saveLock(lock);
     log(`created   vault ${vaultId}`);
   }
 
@@ -82,7 +83,7 @@ async function createCredential({ dir, lock, vault, cred }, secrets, { client, l
     client.beta.vaults.credentials.create(vaultId, credentialCreateBody(cred, secrets)),
   );
   lock.resources[credentialKey(cred)] = { kind: "credential", id: created.id, vault_id: vaultId, hash: hashBody(credentialSettings(cred)) };
-  writeLock(dir, lock);
+  await saveLock(lock);
   log(`created   credential ${created.id}`);
 
   if (cred.data.auth.type === ENV_VAR) return created;
@@ -172,7 +173,7 @@ export async function credLogin(path, { client, ask, openBrowser, port = 0, fetc
     if (existing && existing.vault_id === lock.resources[vaultKey(vault)]?.id) {
       return replaceTokens({ dir, lock, cred, entry: existing }, secrets, { client, log });
     }
-    return createCredential({ dir, lock, vault, cred }, secrets, { client, log });
+    return createCredential({ lock, vault, cred, secrets, client, saveLock: (next) => writeLock(dir, next), log });
   } finally {
     await callback.close();
   }
@@ -230,6 +231,15 @@ export async function credDelete(path, { client, confirm, log = () => {} }) {
     log("Cancelled.");
     return;
   }
+  await deleteCredential({ lock, cred, client, saveLock: (next) => writeLock(dir, next) });
+  log(`deleted   credential ${entry.id}`);
+}
+
+// Permanently deletes a credential, if it has one, and removes it from the lock. One that's already
+// gone counts as deleted. Works on a lock object, like createCredential.
+export async function deleteCredential({ lock, cred, client, saveLock = () => {} }) {
+  const entry = lock.resources[credentialKey(cred)];
+  if (!entry) return;
   try {
     await client.beta.vaults.credentials.delete(entry.id, { vault_id: entry.vault_id });
   } catch (err) {
@@ -238,6 +248,5 @@ export async function credDelete(path, { client, confirm, log = () => {} }) {
     }
   }
   delete lock.resources[credentialKey(cred)];
-  writeLock(dir, lock);
-  log(`deleted   credential ${entry.id}`);
+  await saveLock(lock);
 }

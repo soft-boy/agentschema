@@ -7,7 +7,7 @@ import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { runTool } from "../src/chat.js";
 import { check } from "../src/check.js";
-import { agentBody } from "../src/instance.js";
+import { agentBody } from "../lib/instance.js";
 
 const dir = fileURLToPath(new URL("../examples/calendar-agent", import.meta.url));
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });

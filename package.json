@@ -7,8 +7,14 @@
     "agentschema": "bin/agentschema.js",
     "ags": "bin/agentschema.js"
   },
+  "exports": {
+    ".": "./lib/index.js",
+    "./node": "./src/node.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "bin",
+    "lib",
     "src"
   ],
   "engines": {

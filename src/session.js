@@ -1,10 +1,10 @@
 import { join } from "node:path";
+import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { skillKey, skillRefs } from "../lib/skills.js";
+import { TOOLS_DIR } from "../lib/tools.js";
+import { credentialKey, vaultKey } from "../lib/vaults.js";
 import { check } from "./check.js";
-import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
-import { LOCK_FILE, hashBody, readLock } from "./lock.js";
-import { skillFingerprint, skillKey, skillRefs } from "./skills.js";
-import { TOOLS_DIR } from "./tools.js";
-import { credentialKey, vaultKey } from "./vaults.js";
+import { LOCK_FILE, hashBody, readLock, skillFingerprint } from "./lock.js";
 
 export class SessionError extends Error {}
 
@@ -37,14 +37,38 @@ export async function openSession(dir, { client, sessionId }) {
     if (notes.length > 0) notes.push(`this session uses the deployed version; run agentschema deploy to pick up the changes`);
   }
 
-  // Pin the deployed version, so the session runs exactly what deploy last sent.
+  const name = instance?.agent.data.name;
+  const started = await startSession({
+    instance,
+    lock,
+    client,
+    title: name ? `${name} (agentschema run)` : "agentschema run",
+    pathOf: (file) => join(dir, file),
+  });
+  return { session: started.session, notes: [...notes, ...started.notes] };
+}
+
+// Starts a session from a lock, pinned to a deployed version, so it runs exactly what deploy sent.
+//
+//   instance      the checked files, for finding the vaults to attach
+//   agentVersion  the agent version to pin, instead of the lock's latest
+//   budget        the API's session budget, to cap what the session can spend
+//   pathOf        how to show a file's path to the user in messages
+//
+// Returns { session, notes }.
+export async function startSession({ instance, lock, client, agentVersion, title, budget, pathOf = (file) => file }) {
+  const agent = lock?.resources?.[`./${AGENT_FILE}`];
+  const env = lock?.resources?.[`./${ENV_FILE}`];
+  if (!agent || !env) throw new SessionError("this agent hasn't been deployed (no agent or environment in its lock)");
+
   const params = {
-    agent: { type: "agent", id: agent.id, version: Number(agent.version) },
+    agent: { type: "agent", id: agent.id, version: Number(agentVersion ?? agent.version) },
     environment_id: env.id,
   };
 
   // Every deployed vault in vaults/, in name order: when two hold a credential for the same
   // server, the first one wins.
+  const notes = [];
   const vaultIds = [];
   for (const vault of instance?.vaults ?? []) {
     const entry = lock.resources[vaultKey(vault)];
@@ -56,13 +80,13 @@ export async function openSession(dir, { client, sessionId }) {
     for (const cred of vault.credentials) {
       const credEntry = lock.resources[credentialKey(cred)];
       if (!credEntry || credEntry.vault_id !== entry.id) {
-        notes.push(`credential ${cred.file} hasn't been created; run agentschema cred deploy ${join(dir, cred.file)}`);
+        notes.push(`credential ${cred.file} hasn't been created; run agentschema cred deploy ${pathOf(cred.file)}`);
       }
     }
   }
   if (vaultIds.length > 0) params.vault_ids = vaultIds;
-  const name = instance?.agent.data.name;
-  params.title = name ? `${name} (agentschema run)` : "agentschema run";
+  if (title) params.title = title;
+  if (budget) params.budget = budget;
   return { session: await client.beta.sessions.create(params), notes };
 }
 

@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
+import { agentMessageText, textStream } from "../lib/stream.js";
+import { loadTool } from "./custom-tools.js";
 import { Conversation } from "./session.js";
-import { loadTool } from "./tools.js";
 
 const color = (code) => (text) => (process.stdout.isTTY ? `\x1b[${code}m${text}\x1b[0m` : text);
 const dim = color(2);
@@ -11,7 +12,7 @@ const bold = color(1);
 export function formatEvent(event) {
   switch (event.type) {
     case "agent.message":
-      return event.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+      return agentMessageText(event);
     case "agent.tool_use":
     case "agent.mcp_tool_use": {
       const name = event.type === "agent.mcp_tool_use" ? `${event.mcp_server_name}.${event.name}` : event.name;
@@ -53,54 +54,6 @@ function firstLine(content = []) {
 }
 
 const truncate = (s, n = 100) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-// Prints the agent's text as it streams in, chunk by chunk. Deltas are best effort (the server
-// may stop sending them under load), so the complete agent.message that follows is the record:
-// whatever part of it the deltas didn't cover is printed then.
-export function textStream(write) {
-  let preview = null; // { id, text } for the agent.message being previewed
-  const close = () => {
-    if (preview?.text) write("\n");
-    preview = null;
-  };
-  return {
-    // Returns true when the event was printed here, so it shouldn't be printed again.
-    handle(event) {
-      switch (event.type) {
-        case "event_start":
-          close();
-          if (event.event?.type === "agent.message") preview = { id: event.event.id, text: "" };
-          return true;
-        case "event_delta": {
-          const content = event.delta?.content;
-          if (preview?.id !== event.event_id || content?.type !== "text" || !content.text) return true;
-          preview.text += content.text;
-          write(content.text);
-          return true;
-        }
-        case "agent.message": {
-          if (preview?.id !== event.id) {
-            close();
-            return false;
-          }
-          const full = formatEvent(event);
-          const shown = preview.text;
-          preview = null;
-          if (full.startsWith(shown)) {
-            if (full.length > 0) write(`${full.slice(shown.length)}\n`);
-          } else {
-            write(`\n${full}\n`);
-          }
-          return true;
-        }
-        default:
-          // A model request that errors or is interrupted ends without its agent.message.
-          close();
-          return false;
-      }
-    },
-  };
-}
 
 // Runs a custom tool's code with the call's input. A thrown error is returned as an error
 // result, so the agent sees what went wrong.

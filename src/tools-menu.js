@@ -4,11 +4,11 @@ import { stringify } from "yaml";
 import { check } from "./check.js";
 import { serviceName } from "./cred-menu.js";
 import { DeployError } from "./deploy.js";
-import { builtInFile } from "./init.js";
-import { AGENT_FILE, ENV_FILE } from "./instance.js";
-import { updateFrontmatter } from "./markdown.js";
+import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
+import { builtInFile } from "../lib/scaffold.js";
+import { updateFrontmatter } from "./folder.js";
 import { listMcpTools } from "./mcp.js";
-import { MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR } from "./tools.js";
+import { MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR } from "../lib/tools.js";
 
 const PREBUILT = "Pre-built tools (bash, files, web search)";
 const CUSTOM = "Custom tool (JavaScript that runs on your machine)";

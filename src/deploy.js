@@ -1,23 +1,57 @@
 import { join } from "node:path";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
-import { check } from "./check.js";
-import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "./instance.js";
-import { LOCK_FILE, hashBody, readLock, writeLock } from "./lock.js";
-import { skillFingerprint, skillKey, skillRefs } from "./skills.js";
-import { ENV_VAR, changedImmutableFields, credentialKey, credentialSettings, vaultBody, vaultKey } from "./vaults.js";
+import { checkFiles } from "../lib/check.js";
+import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { skillKey, skillRefs } from "../lib/skills.js";
+import { AGENTBOOK } from "../lib/tools.js";
+import { ENV_VAR, changedImmutableFields, credentialKey, credentialSettings, vaultBody, vaultKey } from "../lib/vaults.js";
+import { folderProblem, readFolder } from "./folder.js";
+import { LOCK_FILE, hashBody, readLock, skillFingerprint, writeLock } from "./lock.js";
 
 export class DeployError extends Error {}
 
-// Creates or updates the skills, environment, agent and vaults a folder defines, recording their
-// IDs in claude-lock.json. Skills go first, because the agent refers to their IDs and versions. Credentials are only updated here: creating one needs its secrets, so
-// that's `cred deploy`'s job.
-// Returns the plan: one { file, kind, action, id, version } entry per resource.
+// Deploys an agent folder, keeping the lock in its claude-lock.json. Returns the plan: one
+// { file, kind, action, id, version } entry per resource.
 export async function deploy(dir, { client, dryRun = false, force = false, log = () => {} }) {
-  const { errors, instance } = check(dir);
-  if (errors.length > 0) throw new DeployError(`check failed:\n  ${errors.join("\n  ")}`);
-  const lock = openLock(dir, client);
+  const problem = folderProblem(dir);
+  if (problem) throw new DeployError(`check failed:\n  ${problem}`);
+  const { plan } = await deployFiles({
+    files: readFolder(dir),
+    lock: readLock(dir),
+    client,
+    dryRun,
+    force,
+    log,
+    saveLock: (lock) => writeLock(dir, lock),
+    pathOf: (file) => join(dir, file),
+  });
+  return plan;
+}
 
-  const skillSteps = await deploySkills(instance.skills, { dir, client, lock, dryRun, log });
+// Creates or updates the skills, environment, agent and vaults in a file map (see lib/files.js).
+// Skills go first, because the agent refers to their IDs and versions. Credentials are only
+// updated here: creating one needs its secrets, so that's `cred deploy`'s job.
+//
+//   lock          the IDs from the last deploy, or null for a first deploy
+//   saveLock      called with the lock as soon as each resource exists, so a failure later
+//                 doesn't orphan it; it may be async
+//   checkOptions  what checkFiles takes: { customTools, toolsets }
+//   pathOf        how to show a file's path to the user in messages
+//
+// Returns { plan, lock }. A dry run calls neither the API nor saveLock.
+export async function deployFiles({
+  files, lock: previous = null, client, dryRun = false, force = false, log = () => {},
+  saveLock = () => {}, checkOptions = {}, pathOf = (file) => file,
+}) {
+  const { errors, instance } = checkFiles(files, checkOptions);
+  if (errors.length > 0) throw new DeployError(`check failed:\n  ${errors.join("\n  ")}`);
+  const agentbook = instance.tools.find((t) => t.data.type === AGENTBOOK);
+  if (agentbook && !checkOptions.toolsets) {
+    throw new DeployError(`${agentbook.file}: this toolset runs on agentbook, so it can only be deployed from there`);
+  }
+  const lock = prepareLock(previous, client);
+
+  const skillSteps = await deploySkills(instance.skills, { client, lock, dryRun, log, saveLock });
   // A dry run has no new IDs or versions yet, so a stand-in shows that the agent will change too.
   const pending = dryRun ? skillSteps.filter((s) => s.action !== "unchanged") : [];
   const refs = instance.skills.flatMap((skill) => {
@@ -28,7 +62,7 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
 
   const steps = [
     { file: ENV_FILE, kind: "environment", body: envBody(instance) },
-    { file: AGENT_FILE, kind: "agent", body: agentBody(instance, refs) },
+    { file: AGENT_FILE, kind: "agent", body: agentBody(instance, refs, checkOptions) },
   ];
   for (const step of steps) {
     step.key = `./${step.file}`;
@@ -53,25 +87,29 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
       ? { kind: "agent", id: result.id, version: String(result.version), hash: step.hash }
       : { kind: "environment", id: result.id, hash: step.hash };
     // Record each resource as soon as it exists, so a failure later doesn't orphan it.
-    writeLock(dir, lock);
+    await saveLock(lock);
 
     const version = step.kind === "agent" ? ` (version ${result.version})` : "";
     log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} ${step.kind} ${result.id}${version}`);
   }
 
-  const vaultSteps = await deployVaults(dir, instance.vaults, { client, lock, dryRun, log });
+  const vaultSteps = await deployVaults(instance.vaults, { client, lock, dryRun, log, saveLock, pathOf });
 
-  return [...skillSteps, ...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
+  const plan = [...skillSteps, ...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
     file, kind, action,
     id: lock.resources[key]?.id,
     version: lock.resources[key]?.version,
   }));
+  return { plan, lock };
 }
 
-// Reads claude-lock.json, or starts a new one, and checks it was written for this API.
-export function openLock(dir, client) {
+// Reads claude-lock.json, or starts a new lock, and checks it was written for this API.
+export const openLock = (dir, client) => prepareLock(readLock(dir), client);
+
+// The lock to deploy with: the one given, or a new one, after checking it's for this API.
+export function prepareLock(previous, client) {
   const baseURL = client.baseURL;
-  const lock = readLock(dir) ?? { version: 1, origin: { base_url: baseURL }, resources: {} };
+  const lock = previous ?? { version: 1, origin: { base_url: baseURL }, resources: {} };
   lock.resources ??= {};
   if (lock.origin?.base_url && lock.origin.base_url !== baseURL) {
     throw new DeployError(
@@ -82,7 +120,7 @@ export function openLock(dir, client) {
 }
 
 // Uploads each skill that's new or changed. A change uploads the whole folder as a new version.
-async function deploySkills(skills, { dir, client, lock, dryRun, log }) {
+async function deploySkills(skills, { client, lock, dryRun, log, saveLock }) {
   const steps = [];
   for (const skill of skills) {
     const step = planStep(lock, { file: skill.path, key: skillKey(skill), kind: "skill", body: skillFingerprint(skill) });
@@ -105,7 +143,7 @@ async function deploySkills(skills, { dir, client, lock, dryRun, log }) {
       ({ id: version } = await call(step, () => client.skills.versions.create(id, { files })));
     }
     lock.resources[step.key] = { kind: "skill", id, version, hash: step.hash };
-    writeLock(dir, lock);
+    await saveLock(lock);
     log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} skill ${id} (version ${version})`);
   }
   return steps;
@@ -113,7 +151,7 @@ async function deploySkills(skills, { dir, client, lock, dryRun, log }) {
 
 // Creates or updates each vault, then updates the settings of credentials already created.
 // A credential file with no credential yet is reported, not created: that needs its secrets.
-async function deployVaults(dir, vaults, { client, lock, dryRun, log }) {
+async function deployVaults(vaults, { client, lock, dryRun, log, saveLock, pathOf }) {
   const steps = [];
   for (const vault of vaults) {
     const step = planStep(lock, { file: vault.path, key: vaultKey(vault), kind: "vault", body: vaultBody(vault) });
@@ -138,7 +176,7 @@ async function deployVaults(dir, vaults, { client, lock, dryRun, log }) {
       if (changed.length > 0) {
         throw new DeployError(
           `${step.file}: ${changed.map((f) => `\`auth.${f}\``).join(", ")} can't be changed on an existing credential. ` +
-            `Delete it with \`agentschema cred delete ${join(dir, step.file)}\`, then create it again with \`agentschema cred deploy\`.`,
+            `Delete it with \`agentschema cred delete ${pathOf(step.file)}\`, then create it again with \`agentschema cred deploy\`.`,
         );
       }
       step.remote = remote;
@@ -147,7 +185,7 @@ async function deployVaults(dir, vaults, { client, lock, dryRun, log }) {
 
   for (const step of steps) {
     if (step.action === "missing") {
-      log(`missing   credential ${step.file} (create it with: agentschema cred deploy ${join(dir, step.file)})`);
+      log(`missing   credential ${step.file} (create it with: agentschema cred deploy ${pathOf(step.file)})`);
       continue;
     }
     if (dryRun || step.action === "unchanged") {
@@ -169,7 +207,7 @@ async function deployVaults(dir, vaults, { client, lock, dryRun, log }) {
       result = await call(step, () => client.beta.vaults.credentials.update(step.entry.id, credentialUpdateBody(step)));
       lock.resources[step.key] = { ...step.entry, hash: step.hash };
     }
-    writeLock(dir, lock);
+    await saveLock(lock);
     log(`${(step.action === "create" ? "created" : "updated").padEnd(9)} ${step.kind} ${result.id}`);
   }
   return steps;

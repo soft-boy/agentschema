@@ -5,7 +5,7 @@ import { check } from "./check.js";
 import { credLogin, credPaste, locate } from "./cred.js";
 import { DeployError } from "./deploy.js";
 import { discover } from "./oauth.js";
-import { ENV_VAR, TOKEN_ENDPOINT_AUTH, VAULTS_DIR, VAULT_FILE } from "./vaults.js";
+import { ENV_VAR, TOKEN_ENDPOINT_AUTH, VAULTS_DIR, VAULT_FILE } from "../lib/vaults.js";
 
 const SIGN_IN = "Sign in with the browser";
 const PASTE = "Paste the tokens";

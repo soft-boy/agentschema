@@ -19,6 +19,12 @@ export function writeLock(dir, lock) {
   writeFileSync(join(dir, LOCK_FILE), JSON.stringify(lock, null, 2) + "\n");
 }
 
+// What's hashed into the lock for a skill: each file's path and contents, so any change makes a
+// new version.
+export function skillFingerprint(skill) {
+  return { files: skill.files.map((f) => [f.rel, createHash("sha256").update(f.bytes).digest("hex")]) };
+}
+
 // Hash of a request body with keys sorted, so key order in the YAML doesn't count as a change.
 export function hashBody(body) {
   return createHash("md5").update(canonicalJSON(body)).digest("hex");

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
 import { check } from "../src/check.js";
-import { agentBody } from "../src/instance.js";
+import { agentBody } from "../lib/instance.js";
 import { prompts } from "../src/prompts.js";
 import { runTool } from "../src/chat.js";
 import { toolsCreate } from "../src/tools-menu.js";

@@ -159,6 +159,18 @@ agentschema cred delete <file>        # delete a credential
 
 Use `agentschema --help` for more info.
 
+## Library
+
+agentschema can also run from your own code, on an agent held as a map of paths to file contents, wherever you store it:
+
+```js
+import { checkFiles } from "@soft-boy/agentschema"; // browser or Node
+import { deployFiles } from "@soft-boy/agentschema/node"; // Node only
+
+const { errors, warnings } = checkFiles(files);
+const { plan, lock } = await deployFiles({ files, lock: savedLock, client, saveLock });
+```
+
 ## Development
 
 ```sh

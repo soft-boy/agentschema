@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { runTool } from "../src/chat.js";
 import { check } from "../src/check.js";
-import { agentBody } from "../src/instance.js";
+import { agentBody } from "../lib/instance.js";
 import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
 
 const READ_FILE_MD = `---

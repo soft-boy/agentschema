@@ -3,12 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { check } from "./check.js";
 import { DeployError, call, openLock, retrieve } from "./deploy.js";
 import { LOCK_FILE, hashBody, writeLock } from "./lock.js";
-import { updateFrontmatter } from "./markdown.js";
+import { updateFrontmatter } from "./folder.js";
 import { authorizationRequest, discover, exchangeCode, registerClient, startCallbackServer } from "./oauth.js";
 import {
   ENV_VAR, VAULTS_DIR, VAULT_FILE, changedImmutableFields, credentialCreateBody, credentialKey, credentialSettings,
   secretsNeeded, vaultBody, vaultKey,
-} from "./vaults.js";
+} from "../lib/vaults.js";
 
 // Finds the agent folder and the credential a path like my-agent/vaults/Ops/slack.md names.
 export function locate(path) {

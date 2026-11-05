@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { check } from "../src/check.js";
-import { agentBody } from "../src/instance.js";
+import { agentBody } from "../lib/instance.js";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const errorsFor = (files) => check(instance(files)).errors;

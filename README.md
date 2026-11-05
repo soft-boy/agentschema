@@ -33,6 +33,14 @@ npm install -g @soft-boy/agentschema
 
 This installs `agentschema`, and `ags` as a short name for it.
 
+## Authentication
+
+Commands that call the API use `ANTHROPIC_API_KEY` if it's exported, or otherwise your `ant auth login` profile. Everything is created in that key's workspace.
+
+```sh
+ANTHROPIC_API_KEY=sk-ant-…
+```
+
 ## Getting started
 
 Create an agent, deploy it, and chat with it:
@@ -129,14 +137,6 @@ auth:
   type: mcp_oauth
   mcp_server_url: https://mcp.linear.app/mcp
 ---
-```
-
-## Authentication
-
-Commands that call the API use `ANTHROPIC_API_KEY` if it's exported, or otherwise your `ant auth login` profile. Everything is created in that key's workspace.
-
-```sh
-ANTHROPIC_API_KEY=sk-ant-…
 ```
 
 ## Usage

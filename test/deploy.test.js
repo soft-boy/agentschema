@@ -139,3 +139,28 @@ test("a locked resource that no longer exists gives a clear error", async () => 
   writeFileSync(join(dir, "env.md"), ENV_MD.replace("quickstart", "renamed"));
   await assert.rejects(deploy(dir, { client }), /env_1 in claude-lock\.json no longer exists/);
 });
+
+test("channels aren't connected by a deploy, which says so", async () => {
+  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "channels/telegram.md": '---\ntype: telegram\nallow: "*"\n---\n\nKeep it short.\n' });
+  const client = fakeClient();
+  const lines = [];
+  await deploy(dir, { client, log: (line) => lines.push(line) });
+
+  assert.deepEqual(client.calls.map((c) => c[0]), ["env.create", "agent.create"]);
+  assert.equal(client.calls[1][1].system, "You are a helpful coding assistant.");
+  assert.ok(lines.some((line) => line.startsWith("channels/ isn't connected")));
+  assert.deepEqual(Object.keys(readLock(dir).resources).sort(), ["./agent.md", "./env.md"]);
+});
+
+test("channels in a folder are checked before anything is sent", async () => {
+  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "channels/telegram.md": "---\ntype: telegram\n---\n" });
+  const client = fakeClient();
+  await assert.rejects(deploy(dir, { client }), /`allow` is required/);
+  assert.deepEqual(client.calls, []);
+});
+
+test("a deploy says nothing about channels when there aren't any", async () => {
+  const lines = [];
+  await deploy(instance(), { client: fakeClient(), log: (line) => lines.push(line) });
+  assert.equal(lines.some((line) => line.includes("channels/")), false);
+});

@@ -12,9 +12,11 @@ my-agent/
 ├── skills/
 │   └── code-review/
 │       └── SKILL.md                  # instructions the agent loads when needed
-└── vaults/
-    └── secrets/
-        └── creds.md                  # a credential, without its secrets
+├── vaults/
+│   └── secrets/
+│       └── creds.md                  # a credential, without its secrets
+└── channels/
+    └── telegram.md                   # a place people can talk to it
 ```
 
 **Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
@@ -53,7 +55,7 @@ agentschema run my-agent
 
 ## Specification
 
-`agent.md` and `env.md` are required; everything else is optional. `agentschema check` validates a folder without calling the API.
+`agent.md` and `env.md` are required; everything else is optional. `agentschema check` validates a folder without calling the API. This is the short version, and the full specification is in [docs/](docs/README.md).
 
 ### `agent.md`
 
@@ -137,6 +139,19 @@ auth:
   type: mcp_oauth
   mcp_server_url: https://mcp.linear.app/mcp
 ---
+```
+
+### `channels/`
+
+Each `.md` file is a place people can talk to the agent: `telegram`, `twilio`, `sendgrid`, `slack` or `discord`. The frontmatter says who can use it and how it behaves, and the body is added to the system prompt there. `check` validates these files, but `deploy` and `run` don't connect them, because that takes a host that's always on. See [Channels](docs/channels.md):
+
+```markdown
+---
+type: telegram
+allow: "*"
+---
+
+You're chatting on Telegram. Keep replies short.
 ```
 
 ## Usage

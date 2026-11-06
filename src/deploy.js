@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
+import { CHANNELS_DIR, readChannels } from "../lib/channels.js";
 import { checkFiles } from "../lib/check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
 import { skillKey, skillRefs } from "../lib/skills.js";
@@ -15,8 +16,9 @@ export class DeployError extends Error {}
 export async function deploy(dir, { client, dryRun = false, force = false, log = () => {} }) {
   const problem = folderProblem(dir);
   if (problem) throw new DeployError(`check failed:\n  ${problem}`);
+  const files = readFolder(dir);
   const { plan } = await deployFiles({
-    files: readFolder(dir),
+    files,
     lock: readLock(dir),
     client,
     dryRun,
@@ -25,6 +27,7 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
     saveLock: (lock) => writeLock(dir, lock),
     pathOf: (file) => join(dir, file),
   });
+  if (readChannels(files).channels.length > 0) log(`${CHANNELS_DIR}/ isn't connected by deploying from here; a channel needs a host that's always on, such as Agentbook`);
   return plan;
 }
 

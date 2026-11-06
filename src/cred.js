@@ -1,9 +1,11 @@
-import { basename, dirname, relative, resolve, sep } from "node:path";
+import { writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { check } from "./check.js";
 import { DeployError, call, openLock, retrieve } from "./deploy.js";
 import { LOCK_FILE, hashBody, writeLock } from "./lock.js";
-import { updateFrontmatter } from "./folder.js";
+import { readFolder, updateFrontmatter } from "./folder.js";
+import { listedMcpToolset } from "./mcp.js";
 import { authorizationRequest, discover, exchangeCode, registerClient, startCallbackServer } from "./oauth.js";
 import {
   ENV_VAR, VAULTS_DIR, VAULT_FILE, changedImmutableFields, credentialCreateBody, credentialKey, credentialSettings,
@@ -168,6 +170,7 @@ export async function credLogin(path, { client, ask, openBrowser, port = 0, fetc
 
     const secrets = { accessToken: tokens.accessToken, expiresAt: tokens.expiresAt, refreshToken: tokens.refreshToken, clientSecret };
     const { dir, vault, cred } = located;
+    await listToolsInFile(dir, auth.mcp_server_url, tokens.accessToken, { fetch, log });
     const lock = openLock(dir, client);
     const existing = lock.resources[credentialKey(cred)];
     if (existing && existing.vault_id === lock.resources[vaultKey(vault)]?.id) {
@@ -177,6 +180,14 @@ export async function credLogin(path, { client, ask, openBrowser, port = 0, fetc
   } finally {
     await callback.close();
   }
+}
+
+// Now that the server will say what it offers, lists its tools in their file.
+async function listToolsInFile(dir, url, token, { fetch, log }) {
+  const listed = await listedMcpToolset(readFolder(dir), url, { fetch, token });
+  if (!listed) return;
+  writeFileSync(join(dir, listed.path), listed.text);
+  log(`Listed the server's tools in ${listed.path}.`);
 }
 
 async function required(ask, question) {

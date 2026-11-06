@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { PassThrough } from "node:stream";
 import { join } from "node:path";
@@ -9,13 +9,15 @@ import { check } from "../src/check.js";
 import { credCreate, credDeploy } from "../src/cred-menu.js";
 import { credLogin } from "../src/cred.js";
 import { prompts } from "../src/prompts.js";
+import { builtInFile } from "../lib/scaffold.js";
+import { mcpToolsetFile } from "../lib/tools.js";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 // A local MCP server and authorization server: protected resource metadata, authorization
 // server metadata, client registration, an authorize endpoint that approves at once, and a
 // token endpoint that checks the PKCE verifier.
-async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/mcp" } = {}) {
-  const seen = { authorize: null, token: null, registered: null };
+async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/mcp", tools = null } = {}) {
+  const seen = { authorize: null, token: null, registered: null, toolsAuthorization: null };
   const challenges = new Map();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, origin);
@@ -23,6 +25,15 @@ async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/
     let body = "";
     for await (const chunk of req) body += chunk;
 
+    // The MCP server itself: it only says what it offers to someone signed in.
+    if (tools && url.pathname === path && req.method === "POST") {
+      const message = JSON.parse(body);
+      seen.toolsAuthorization = req.headers.authorization ?? null;
+      if (req.headers.authorization !== "Bearer at_1") return json(401, { error: "sign in" });
+      if (message.id === undefined) return res.writeHead(202).end();
+      const result = message.method === "tools/list" ? { tools: tools.map((name) => ({ name })) } : { protocolVersion: "2025-06-18", capabilities: {} };
+      return json(200, { jsonrpc: "2.0", id: message.id, result });
+    }
     if (url.pathname === `/.well-known/oauth-protected-resource${path}`) {
       return json(200, { resource: `${origin}${path}`, authorization_servers: [`${origin}/auth`], scopes_supported: ["read", "write"] });
     }
@@ -331,4 +342,51 @@ test("the library can register under its own name, and manage credentials on a l
   assert.equal(lock.resources["./vaults/secrets/key.md"], undefined);
   await deleteCredential({ lock, cred, client });
   assert.equal(calls.filter((c) => c[0] === "delete").length, 1);
+});
+
+test("cred login lists the server's tools in their file, with the permission that was chosen", async () => {
+  const oauth = await fakeOAuth({ tools: ["list_issues", "create_issue"] });
+  try {
+    const agent = AGENT_MD.replace("---\n\n", `mcp_servers:\n  - type: url\n    name: linear\n    url: ${oauth.url}\n---\n\n`);
+    const dir = instance({
+      "agent.md": agent,
+      "env.md": ENV_MD,
+      "tools/linear.md": mcpToolsetFile({ name: "linear", permission: "auto" }),
+      "vaults/Ops/Linear.md": credFile(oauth.url),
+    });
+    assert.equal(check(dir).instance.tools[0].rows, null);
+
+    const client = fakeClient();
+    await credLogin(join(dir, "vaults/Ops/Linear.md"), { client, ask: noSecrets, openBrowser: browser });
+    assert.equal(oauth.seen.toolsAuthorization, "Bearer at_1");
+    const { errors, instance: after } = check(dir);
+    assert.deepEqual(errors, []);
+    const [tool] = after.tools;
+    assert.deepEqual(tool.rows, [
+      { name: "create_issue", enabled: "true", permission: "auto" },
+      { name: "list_issues", enabled: "true", permission: "auto" },
+    ]);
+    assert.doesNotMatch(readFileSync(join(dir, "tools/linear.md"), "utf8"), /at_1/);
+
+    // A table that's already there may hold choices, so signing in again leaves it alone.
+    const edited = readFileSync(join(dir, "tools/linear.md"), "utf8").replace("| `create_issue` | `true`", "| `create_issue` | `false`");
+    writeFileSync(join(dir, "tools/linear.md"), edited);
+    await credLogin(join(dir, "vaults/Ops/Linear.md"), { client, ask: noSecrets, openBrowser: browser });
+    assert.equal(readFileSync(join(dir, "tools/linear.md"), "utf8"), edited);
+  } finally {
+    await oauth.close();
+  }
+});
+
+test("a toolset's file says what was chosen, with or without its tools", () => {
+  const listed = mcpToolsetFile({ name: "linear", tools: ["a", "b"], permission: "always_allow" });
+  assert.match(listed, /\| `a` \| `true` \| `always_allow` \|/);
+  assert.match(listed, /\| `b` \| `true` \| `always_allow` \|/);
+  assert.doesNotMatch(listed, /default_config/);
+
+  assert.match(mcpToolsetFile({ name: "linear", permission: "auto" }), /default_config:\n {2}permission_policy:\n {4}type: auto/);
+  // Asking is what the API does anyway for these, so there's nothing to add.
+  assert.doesNotMatch(mcpToolsetFile({ name: "linear" }), /default_config/);
+  assert.match(builtInFile(["bash"], [], "always_ask"), /\| `bash` \| `false` \| `always_ask` \|/);
+  assert.match(builtInFile(["bash"]), /\| `bash` \| `true` \| `auto` \|/);
 });

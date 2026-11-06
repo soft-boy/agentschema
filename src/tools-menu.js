@@ -8,7 +8,7 @@ import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
 import { builtInFile } from "../lib/scaffold.js";
 import { updateFrontmatter } from "./folder.js";
 import { listMcpTools } from "./mcp.js";
-import { MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR } from "../lib/tools.js";
+import { MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR, mcpToolsetFile } from "../lib/tools.js";
 
 const PREBUILT = "Pre-built tools (bash, files, web search)";
 const CUSTOM = "Custom tool (JavaScript that runs on your machine)";
@@ -57,7 +57,7 @@ async function prebuilt(dir, { tools }, io) {
     enabled = [];
     for (const name of PREBUILT_TOOLS) if (await io.confirm(`  ${name}?`, true)) enabled.push(name);
   }
-  return { path: `${TOOLS_DIR}/${TOOLSET_FILE}`, text: builtInFile(PREBUILT_TOOLS, enabled) };
+  return { path: `${TOOLS_DIR}/${TOOLSET_FILE}`, text: builtInFile(PREBUILT_TOOLS, enabled, await choosePermission(io, "auto")) };
 }
 
 // A custom tool: its name, description and inputs, with a code block to fill in.
@@ -138,28 +138,20 @@ async function mcp(dir, instance, io, { fetch, log }) {
   });
   const addServer = existing ? null : { type: "url", name, url };
 
-  const policies = ["always_ask", ...POLICIES.filter((p) => p !== "always_ask")];
-  const policy = await io.select("Ask you before each call? (permission for its tools)", policies.map(describePolicy), describePolicy("always_ask"));
-  const permission = policies.find((p) => describePolicy(p) === policy);
+  const permission = await choosePermission(io, "always_ask");
 
-  // A table of the server's tools, all on, to edit. A tool the server adds later isn't in the
-  // table, so it gets the API's defaults: on, and asking before each call.
   log(`Asking ${url} for its tools…`);
   const names = await listMcpTools(url, { fetch });
-  const front = { type: MCP_TOOLSET, mcp_server_name: name };
-  if (names) {
-    log(`It has ${names.length} tool${names.length === 1 ? "" : "s"}.`);
-    const rows = names.map((t) => `| \`${t}\` | \`true\` | \`${permission}\` |`);
-    const body = ["Set Enabled to false to turn a tool off.", "", "## Tools", "", "| Name | Enabled | Permission |", "|---|---|---|", ...rows, ""].join("\n");
-    return { path: `${TOOLS_DIR}/${name}.md`, text: `---\n${stringify(front)}---\n\n${body}`, addServer };
-  }
+  if (names) log(`It has ${names.length} tool${names.length === 1 ? "" : "s"}.`);
+  else log("It won't list its tools without signing in, so they'll be listed once you have; until then, every tool is on.");
+  return { path: `${TOOLS_DIR}/${name}.md`, text: mcpToolsetFile({ name, tools: names ?? [], permission }), addServer };
+}
 
-  // It won't list them without signing in: every tool is on, with the permission chosen.
-  log("It won't list its tools without signing in, so the file has no table; every tool is on.");
-  if (permission !== "always_ask") front.default_config = { permission_policy: { type: permission } };
-  const body = "Every tool the server offers is on. To turn one off, or give it its own permission, add a table:\n\n" +
-    "    ## Tools\n\n    | Name | Enabled | Permission |\n    |---|---|---|\n    | `delete_event` | `false` | |\n";
-  return { path: `${TOOLS_DIR}/${name}.md`, text: `---\n${stringify(front)}---\n\n${body}`, addServer };
+// Asks how a set of tools should be approved, offering `recommended` first.
+export async function choosePermission(io, recommended) {
+  const policies = [recommended, ...POLICIES.filter((p) => p !== recommended)];
+  const answer = await io.select("Ask you before each call? (permission for its tools)", policies.map(describePolicy), describePolicy(recommended));
+  return policies.find((p) => describePolicy(p) === answer);
 }
 
 function describePolicy(policy) {

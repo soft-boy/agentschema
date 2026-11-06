@@ -21,13 +21,15 @@ const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "env.md": ENV_MD
 
 test("tools create writes the pre-built toolset, with the tools you pick", async () => {
   const dir = folder();
-  // kind, all eight?, then bash yes and the rest no
-  await toolsCreate(dir, { io: menu(["1", "n", "y", "n", "n", "n", "n", "n", "n", "n"]) });
+  // kind, all eight?, then bash yes and the rest no, then the permission: the second choice
+  await toolsCreate(dir, { io: menu(["1", "n", "y", "n", "n", "n", "n", "n", "n", "n", "2"]) });
   const { errors, instance: inst } = check(dir);
   assert.deepEqual(errors, []);
   const { configs } = agentBody(inst).tools[0];
   assert.equal(configs.length, 8);
   assert.deepEqual(configs.filter((c) => c.enabled).map((c) => c.name), ["bash"]);
+  // Off or on, every row says what was chosen, so nothing's left blank to wonder about.
+  assert.ok(configs.every((c) => c.permission_policy.type === "always_allow"));
 
   await assert.rejects(toolsCreate(dir, { io: menu(["1"]) }), /already has its pre-built tools in tools\/agent_toolset_20260401\.md/);
 });

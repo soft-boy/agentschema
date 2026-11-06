@@ -5,5 +5,6 @@ export { createCredential, deleteCredential } from "./cred.js";
 export { DeployError, deploy, deployFiles, prepareLock } from "./deploy.js";
 export { readFolder, updateFrontmatter } from "./folder.js";
 export { LOCK_FILE, hashBody, readLock, skillFingerprint, writeLock } from "./lock.js";
+export { listMcpTools, listedMcpToolset } from "./mcp.js";
 export { OAuthError, authorizationRequest, discover, exchangeCode, registerClient } from "./oauth.js";
 export { Conversation, SessionError, openSession, startSession } from "./session.js";

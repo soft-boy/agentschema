@@ -3,6 +3,7 @@ import { basename, dirname, resolve } from "node:path";
 import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
 import { MODELS, NETWORKING, defaultAnswers, scaffold } from "../lib/scaffold.js";
 import { TOOLSET_FILE, TOOLS_DIR } from "../lib/tools.js";
+import { choosePermission } from "./tools-menu.js";
 import { prompts } from "./prompts.js";
 
 export class InitError extends Error {}
@@ -41,6 +42,7 @@ async function ask(answers, input, output) {
     answers.model = await io.select("Model?", MODELS, answers.model);
     answers.system = await io.text("System prompt?", answers.system);
     answers.tools = await confirm("Give it the built-in tools (bash, files, web)?", answers.tools);
+    if (answers.tools) answers.permission = await choosePermission(io, answers.permission);
     answers.environment = await io.text("Environment name?", answers.environment);
     answers.networking = await io.select("Networking?", NETWORKING, answers.networking);
     if (answers.networking === "limited") {

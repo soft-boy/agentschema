@@ -52,17 +52,20 @@ export async function openSession(dir, { client, sessionId }) {
 //
 //   instance      the checked files, for finding the vaults to attach
 //   agentVersion  the agent version to pin, instead of the lock's latest
+//   system        the system prompt for this session only, such as with a channel's instructions added
 //   budget        the API's session budget, to cap what the session can spend
 //   pathOf        how to show a file's path to the user in messages
 //
 // Returns { session, notes }.
-export async function startSession({ instance, lock, client, agentVersion, title, budget, pathOf = (file) => file }) {
+export async function startSession({ instance, lock, client, agentVersion, system, title, budget, pathOf = (file) => file }) {
   const agent = lock?.resources?.[`./${AGENT_FILE}`];
   const env = lock?.resources?.[`./${ENV_FILE}`];
   if (!agent || !env) throw new SessionError("this agent hasn't been deployed (no agent or environment in its lock)");
 
+  const pinned = { id: agent.id, version: Number(agentVersion ?? agent.version) };
   const params = {
-    agent: { type: "agent", id: agent.id, version: Number(agentVersion ?? agent.version) },
+    // Overriding affects this session only, and doesn't change the agent or make a new version of it.
+    agent: system === undefined ? { type: "agent", ...pinned } : { type: "agent_with_overrides", ...pinned, system },
     environment_id: env.id,
   };
 

@@ -2,7 +2,7 @@
 
 Places people can talk to the agent, such as Telegram, SMS, email, Slack or Discord. Each `.md` file directly in `channels/` is a channel, named after the file, so an agent can have two Telegram bots.
 
-**Status:** a draft. `check` validates these files, but no host connects them yet.
+**Status:** a draft. `check` validates all five types. [Agentbook](https://tryagentbook.com) connects `telegram`, and nothing connects the others yet.
 
 ```markdown path=channels/telegram.md
 ---
@@ -25,7 +25,7 @@ For each message, a host receives it from the provider, starts or continues a se
 
 The body holds instructions for conversations on this channel. They're added after `agent.md`'s system prompt, for those sessions only, so one agent can write short texts over SMS and fuller replies by email. The two together can be up to the API's limit of 100,000 characters.
 
-A session can override `system` for itself, so a channel doesn't need its own copy of the agent. `channelSystem(agent, channel)` builds the prompt, so that every host joins them the same way.
+A session can override `system` for itself, so a channel doesn't need its own copy of the agent. `channelSystem(agent, channel)` builds the prompt, so that every host joins them the same way, and `startSession` takes it as `system`.
 
 ## Fields every channel has
 

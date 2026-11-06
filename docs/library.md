@@ -148,6 +148,7 @@ See [Channels](channels.md).
 | `lock` | The lock |
 | `client` | The API client |
 | `agentVersion` | The version to pin, instead of the lock's latest |
+| `system` | The system prompt for this session only, such as `channelSystem(agent, channel)` |
 | `title` | The session's title |
 | `budget` | The API's session budget, to cap what it can spend |
 | `pathOf` | How to show a file's path in messages |

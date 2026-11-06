@@ -77,4 +77,4 @@ For secrets the agent's own commands need, use an [environment variable credenti
 
 `startSession` and `Conversation` do all this without a terminal. A host can pin a specific agent version, set a budget, and answer approvals its own way. See [Library](library.md).
 
-A session can also override `system`, `model`, `tools`, `mcp_servers` and `skills` for itself, by passing `{type: "agent_with_overrides", id, version, …}` as the agent. Channels use this for their instructions. `startSession` doesn't do it for you yet.
+A session can override `system` for itself, without changing the agent or making a new version of it: pass `system` to `startSession`. Channels use this for their instructions. The API can override `model`, `tools`, `mcp_servers` and `skills` the same way, by passing `{type: "agent_with_overrides", id, version, …}` as the agent, but `startSession` only does `system`.

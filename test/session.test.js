@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { textStream } from "../lib/stream.js";
 import { chat } from "../src/chat.js";
 import { deploy } from "../src/deploy.js";
-import { Conversation, SessionError, openSession } from "../src/session.js";
+import { Conversation, SessionError, openSession, startSession } from "../src/session.js";
 import { AGENT_MD, instance } from "./helpers.js";
 
 let n = 0;
@@ -271,4 +271,20 @@ test("run opts in to deltas and streams the reply into the terminal", async () =
   await chat(api.client, { id: "sesn_1" }, { agentName: "Coding Assistant", input, output });
   assert.deepEqual(params, { event_deltas: ["agent.message"] });
   assert.equal(printed.split("Hi there").length, 2, "reply printed exactly once");
+});
+
+test("a session can have its own system prompt, without changing the agent", async () => {
+  const lock = { resources: { "./agent.md": { id: "agent_1", version: "4" }, "./env.md": { id: "env_1" } } };
+  const created = [];
+  const client = { beta: { sessions: { create: async (params) => (created.push(params), { id: "sesn_1" }) } } };
+
+  await startSession({ lock, client });
+  await startSession({ lock, client, system: "Agent.\n\nKeep it short." });
+  await startSession({ lock, client, system: "Pinned.", agentVersion: 2 });
+
+  assert.deepEqual(created.map((params) => params.agent), [
+    { type: "agent", id: "agent_1", version: 4 },
+    { type: "agent_with_overrides", id: "agent_1", version: 4, system: "Agent.\n\nKeep it short." },
+    { type: "agent_with_overrides", id: "agent_1", version: 2, system: "Pinned." },
+  ]);
 });

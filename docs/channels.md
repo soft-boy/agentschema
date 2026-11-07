@@ -78,6 +78,7 @@ A number followed by `m`, `h` or `d`, like `30m`, `24h` or `7d`.
 |---|---|
 | `messages_per_sender_per_hour` | How much one person can send |
 | `messages_per_day` | How much the whole channel can receive |
+| `messages_sent_per_hour` | How many messages the agent can post through [`send_to`](#posting-on-its-own) |
 
 Each is a whole number above 0. Every message is paid for by the agent's owner, so a public channel should have limits, and a host should enforce its own as well.
 
@@ -193,6 +194,7 @@ You're answering a slash command on Discord, so keep it under 2,000 characters.
 | **`guilds`** | The server IDs it may reply in |
 | **`channels`** | The channel IDs it may answer mentions and replies in, within those servers |
 | **`dedicated_channels`** | Channels it has to itself. See below |
+| **`send_to`** | Channels it may post in on its own. See [Posting on its own](#posting-on-its-own) |
 | **`command`** | The slash command's name, like `ask` |
 | **`allow`** | Numeric user IDs in quotes |
 | **Secrets** | `bot_token` |
@@ -214,6 +216,24 @@ You're on Discord, and one channel there is your own, so everyone in it is talki
 
 To answer only in those channels, and nowhere else, write `respond_to: []`. `channels` doesn't limit dedicated channels. Reading every message in a channel needs Discord's Message Content Intent, which is on the bot's page in the Developer Portal. Without it, Discord only shows a bot the messages that mention it.
 
+## Posting on its own
+
+An agent normally only answers. `send_to` lists the places it may also post in on its own, such as an announcements channel. It's on Discord, where it lists channel IDs:
+
+```markdown path=channels/server.md
+---
+type: discord
+application_id: "123456789012345678"
+public_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+send_to: ["223456789012345678"]
+limits:
+  messages_sent_per_hour: 10
+allow: "*"
+---
+```
+
+The list does nothing by itself. The host gives the agent a tool that posts, such as Agentbook's `messaging` toolset, and the list is what that tool is limited to. A place can only be in one file's `send_to`, so it's clear which bot posts there. The bot needs to be in that server, with permission to see the channel and send messages there, but it doesn't need the Message Content Intent.
+
 ## Secrets
 
 A channel's secrets never go in its file, and naming one there is an error. They also can't go in a [vault](vaults.md), because vault secrets are write-only, and a host has to read them back to send a reply.
@@ -229,7 +249,7 @@ channels/telegram.md: anyone can message this channel, and these tools can run
 without asking, through your sign-ins and connections: bank.pay, calendar.book
 ```
 
-That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Pre-built tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent.
+That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Pre-built tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent, and nor does one with `safeForAnyone: true`, such as one that only lists where the agent can post. A tool that posts through `send_to` does count, because anyone could have it post in those channels.
 
 ## Other rules
 
@@ -250,5 +270,6 @@ Read a channel with `readChannels(files)`, and get its behavior with `channelSet
 - Treat a channel like a public page: run the deployed version, on the same copy of the agent, and enforce your own limits.
 - Acknowledge a provider's webhook quickly and do the work afterwards, because providers retry, and a retry shouldn't start a second reply.
 - Verify each provider's signature on incoming messages before trusting them.
+- Post only in the places a channel's `send_to` lists, and only while the channel is enabled. Turn mentions off, so that an agent can't be talked into pinging everyone.
 - Visitors should only see the agent's words, not tool calls or error details.
 - Check each provider's own docs when you build for it. Each has its own rules on setup, message length and sign-up, such as registering to send SMS in the US, or receiving email on a subdomain.

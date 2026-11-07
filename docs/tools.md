@@ -242,6 +242,8 @@ checkFiles(files, { toolsets });
 
 Without a catalog, `check` warns that the file needs a host, and `deploy` refuses it. With one, an unknown toolset or tool is an error.
 
+A tool in the catalog can also have `liveAllowed: false`, if it never runs on a live agent, or `safeForAnyone: true`, if anyone at all may use it, like one that only lists where the agent can post. These only change what `check` says about [channels](channels.md#who-can-reach-what) anyone can message. Enforcing `liveAllowed` is up to the host.
+
 ## Limits
 
 An agent can have up to 256 tools at the API. agentschema counts each custom tool, plus one for everything else.

@@ -208,10 +208,10 @@ test("pre-built tools don't count, since they run in the session's own container
   assert.deepEqual(checked({ "tools/agent_toolset_20260401.md": PREBUILT_MD, "channels/c.md": file(VALID.telegram) }).warnings, []);
 });
 
-test("agentbook tools count, unless they never run on a live agent", () => {
-  const tool = "---\ntype: agentbook\ntoolset: calendar\n---\n\n## Tools\n\n| Name | Enabled | Permission |\n|---|---|---|\n| book | true | always_allow |\n| cancel | true | always_allow |\n| check | true | always_ask |\n";
+test("agentbook tools count, unless they never run on a live agent, or are safe for anyone", () => {
+  const tool = "---\ntype: agentbook\ntoolset: calendar\n---\n\n## Tools\n\n| Name | Enabled | Permission |\n|---|---|---|\n| book | true | always_allow |\n| cancel | true | always_allow |\n| check | true | always_ask |\n| hours | true | always_allow |\n";
   const schema = { type: "object", properties: {} };
-  const toolsets = { calendar: { tools: [{ name: "book", description: "b", input_schema: schema }, { name: "cancel", description: "c", input_schema: schema, liveAllowed: false }, { name: "check", description: "k", input_schema: schema }] } };
+  const toolsets = { calendar: { tools: [{ name: "book", description: "b", input_schema: schema }, { name: "cancel", description: "c", input_schema: schema, liveAllowed: false }, { name: "check", description: "k", input_schema: schema }, { name: "hours", description: "h", input_schema: schema, safeForAnyone: true }] } };
   const { errors, warnings } = checked({ "tools/calendar.md": tool, "channels/c.md": file(VALID.telegram) }, { toolsets });
   assert.deepEqual(errors, []);
   assert.match(warnings[0], /calendar\.book$/);
@@ -219,11 +219,11 @@ test("agentbook tools count, unless they never run on a live agent", () => {
 
 test("settings fill in each type's defaults, so hosts agree on them", () => {
   const settings = (front) => channelSettings(readChannels({ "channels/c.md": file(front) }).channels[0]);
-  assert.deepEqual(settings(VALID.telegram), { type: "telegram", enabled: true, allow: "*", respondTo: ["direct", "mention"], dedicatedChannels: [], scope: "sender", expiresAfterMs: 86_400_000, approvals: "deny", limits: {}, greeting: null });
+  assert.deepEqual(settings(VALID.telegram), { type: "telegram", enabled: true, allow: "*", respondTo: ["direct", "mention"], dedicatedChannels: [], sendTo: [], scope: "sender", expiresAfterMs: 86_400_000, approvals: "deny", limits: {}, greeting: null });
   assert.equal(settings('type: sendgrid\naddress: a@b.co\nallow: "*"').scope, "thread");
   assert.equal(settings('type: slack\nallow: "*"').scope, "thread");
   const custom = settings('type: slack\nallow: [U012AB3CD]\nenabled: false\nscope: room\nrespond_to: [all]\nexpires_after: 30m\napprovals: sender\nlimits: {messages_per_day: 5}\ngreeting: Hi');
-  assert.deepEqual(custom, { type: "slack", enabled: false, allow: ["U012AB3CD"], respondTo: ["all"], dedicatedChannels: [], scope: "room", expiresAfterMs: 1_800_000, approvals: "sender", limits: { messages_per_day: 5 }, greeting: "Hi" });
+  assert.deepEqual(custom, { type: "slack", enabled: false, allow: ["U012AB3CD"], respondTo: ["all"], dedicatedChannels: [], sendTo: [], scope: "room", expiresAfterMs: 1_800_000, approvals: "sender", limits: { messages_per_day: 5 }, greeting: "Hi" });
 });
 
 test("the system prompt is the agent's, then the channel's", () => {
@@ -289,4 +289,26 @@ test("a Discord agent can have channels to itself, as well as or instead of answ
   assert.match(errorsFor(front("dedicated_channels: []\nrespond_to: []"))[0], /`respond_to` must be a list/);
   assert.match(errorsFor(front("dedicated_channels: [general]"))[0], /a numeric channel ID/);
   assert.match(errorsFor('type: telegram\nallow: "*"\ndedicated_channels: ["1"]')[0], /unknown field `dedicated_channels`/);
+});
+
+test("a Discord agent can list channels it may post in on its own, with a limit of their own", () => {
+  const OTHER = "223456789012345678";
+  const front = (rest, id = ID) => `type: discord\napplication_id: "${id}"\npublic_key: ${KEY}\nallow: "*"\n${rest}`;
+  const posting = front(`send_to: ["${ID}", "${OTHER}"]\nlimits: {messages_sent_per_hour: 10}`);
+  assert.deepEqual(errorsFor(posting), []);
+  assert.deepEqual(warningsFor(posting), []);
+  const settings = channelSettings(readChannels({ "channels/c.md": file(posting) }).channels[0]);
+  assert.deepEqual(settings.sendTo, [ID, OTHER]);
+  assert.deepEqual(settings.limits, { messages_sent_per_hour: 10 });
+
+  assert.match(errorsFor(front("send_to: [announcements]"))[0], /`send_to` must be a numeric channel ID/);
+  assert.match(errorsFor(front(`send_to: ${ID}`))[0], /`send_to` must be a list/);
+  assert.match(errorsFor('type: telegram\nallow: "*"\nsend_to: ["1"]')[0], /unknown field `send_to`/);
+  assert.match(warningsFor(front("limits: {messages_sent_per_hour: 10}"))[0], /no effect without `send_to`/);
+});
+
+test("only one bot can post in a channel, so it's clear which one does", () => {
+  const front = (id) => `type: discord\napplication_id: "${id}"\npublic_key: ${KEY}\nallow: "*"\nsend_to: ["${ID}"]`;
+  const { errors } = checked({ "channels/a.md": file(front("323456789012345678")), "channels/b.md": file(front("423456789012345678")) });
+  assert.deepEqual(errors, [`channels/b.md: \`send_to\`: ${ID} is already in channels/a.md, and only one bot can post there`]);
 });

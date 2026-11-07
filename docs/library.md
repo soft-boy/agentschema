@@ -103,6 +103,19 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 
 See [Channels](channels.md).
 
+### Scheduled tasks
+
+| Export | What it does |
+|---|---|
+| `readScheduled(files)` | Returns `{ tasks, errors }` |
+| `taskSettings(task)` | How a task behaves, with every default filled in: `{ name, schedule, timezone, enabled, budgetCents, description, message }` |
+| `taskBody(task)` | The parts of its deployment that come from the file: `name`, `initial_events`, `schedule`, and `budget` and `description` if it has them |
+| `taskKey(task)` | Its key in the lock |
+| `cronProblem(expression)` | What's wrong with a cron expression, or null |
+| `isTimeZone(value)` | Whether it's an IANA time zone |
+
+See [Scheduled tasks](scheduled.md).
+
 ### Streaming
 
 | Export | What it does |
@@ -113,7 +126,7 @@ See [Channels](channels.md).
 ### Files and constants
 
 - **Files:** `textOf`, `bytesOf`, `isIgnoredPath`, `pathsUnder`
-- **Names:** `AGENT_FILE`, `ENV_FILE`, `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `TOOLSET_FILE`
+- **Names:** `AGENT_FILE`, `ENV_FILE`, `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `TOOLSET_FILE`
 - **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `PREBUILT_TOOLS`, `POLICIES`
 - **Credential types:** `MCP_OAUTH`, `ENV_VAR`, `CREDENTIAL_TYPES`, `SECRET_FIELDS`, `TOKEN_ENDPOINT_AUTH`
 - **Other:** `MODELS`, `NETWORKING`, `MAX_UPLOAD_BYTES`, `FileError`
@@ -135,8 +148,14 @@ See [Channels](channels.md).
 | `saveLock` | Called with the lock as each resource exists, and may be async |
 | `checkOptions` | What `checkFiles` takes |
 | `pathOf` | How to show a file's path in messages |
+| `scheduled` | `false` leaves scheduled tasks alone, for a copy of the agent that's only for trying it out |
 
 `deploy(dir, options)` does the same for a folder on disk. `prepareLock(previous, client)` returns the lock to use, after checking it's for this API. Failures are `DeployError`.
+
+| Export | What it does |
+|---|---|
+| `pauseScheduled({ lock, client, saveLock })` | Pauses every scheduled task in a lock, such as when the agent goes offline. The next deploy unpauses the ones whose files say they're enabled |
+| `archiveScheduled({ lock, client, saveLock })` | Archives them all, for good, such as before deleting the agent |
 
 ### Sessions
 

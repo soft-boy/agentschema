@@ -3,6 +3,7 @@ import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { CHANNELS_DIR, readChannels } from "../lib/channels.js";
 import { checkFiles } from "../lib/check.js";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { taskBody, taskKey, taskSettings } from "../lib/scheduled.js";
 import { skillKey, skillRefs } from "../lib/skills.js";
 import { AGENTBOOK } from "../lib/tools.js";
 import { ENV_VAR, changedImmutableFields, credentialKey, credentialSettings, vaultBody, vaultKey } from "../lib/vaults.js";
@@ -31,20 +32,23 @@ export async function deploy(dir, { client, dryRun = false, force = false, log =
   return plan;
 }
 
-// Creates or updates the skills, environment, agent and vaults in a file map (see lib/files.js).
-// Skills go first, because the agent refers to their IDs and versions. Credentials are only
-// updated here: creating one needs its secrets, so that's `cred deploy`'s job.
+// Creates or updates the skills, environment, agent, vaults and scheduled tasks in a file map (see
+// lib/files.js). Skills go first, because the agent refers to their IDs and versions, and scheduled
+// tasks go last, because they refer to everything else. Credentials are only updated here: creating
+// one needs its secrets, so that's `cred deploy`'s job.
 //
 //   lock          the IDs from the last deploy, or null for a first deploy
 //   saveLock      called with the lock as soon as each resource exists, so a failure later
 //                 doesn't orphan it; it may be async
 //   checkOptions  what checkFiles takes: { customTools, toolsets }
 //   pathOf        how to show a file's path to the user in messages
+//   scheduled     false leaves scheduled tasks alone, for a copy of the agent that's only for trying
+//                 it out
 //
 // Returns { plan, lock }. A dry run calls neither the API nor saveLock.
 export async function deployFiles({
   files, lock: previous = null, client, dryRun = false, force = false, log = () => {},
-  saveLock = () => {}, checkOptions = {}, pathOf = (file) => file,
+  saveLock = () => {}, checkOptions = {}, pathOf = (file) => file, scheduled = true,
 }) {
   const { errors, instance } = checkFiles(files, checkOptions);
   if (errors.length > 0) throw new DeployError(`check failed:\n  ${errors.join("\n  ")}`);
@@ -98,12 +102,116 @@ export async function deployFiles({
 
   const vaultSteps = await deployVaults(instance.vaults, { client, lock, dryRun, log, saveLock, pathOf });
 
-  const plan = [...skillSteps, ...steps, ...vaultSteps].map(({ file, kind, action, key }) => ({
+  // A dry run has no IDs for what it would create, or versions for what it would change.
+  const pendingAgent = dryRun && steps.some((step) => step.action !== "unchanged" && step.kind === "agent");
+  const pendingVaults = dryRun ? vaultSteps.filter((step) => step.kind === "vault" && step.action === "create").map((step) => step.key) : [];
+  const taskSteps = scheduled
+    ? await deployScheduled(instance, { client, lock, dryRun, log, saveLock, pendingAgent, pendingVaults })
+    : [];
+
+  const plan = [...skillSteps, ...steps, ...vaultSteps, ...taskSteps].map(({ file, kind, action, key, entry }) => ({
     file, kind, action,
-    id: lock.resources[key]?.id,
+    id: lock.resources[key]?.id ?? entry?.id,
     version: lock.resources[key]?.version,
   }));
   return { plan, lock };
+}
+
+// Makes a deployment for each task in scheduled/, pinned to the agent's version and with every
+// deployed vault, then pauses or unpauses it to match `enabled`. A task whose file is gone has its
+// deployment archived, because a schedule left behind would keep running, and costing money.
+async function deployScheduled(instance, { client, lock, dryRun, log, saveLock, pendingAgent, pendingVaults }) {
+  const agentEntry = lock.resources[`./${AGENT_FILE}`];
+  const envEntry = lock.resources[`./${ENV_FILE}`];
+  const agent = { type: "agent", id: agentEntry?.id ?? "pending", version: pendingAgent || !agentEntry ? "pending" : Number(agentEntry.version) };
+  const vaultIds = instance.vaults.map((vault) => lock.resources[vaultKey(vault)]?.id ?? (pendingVaults.includes(vaultKey(vault)) ? `pending:${vault.path}` : null)).filter(Boolean);
+
+  const steps = [];
+  for (const task of instance.scheduled) {
+    const body = { ...taskBody(task), agent, environment_id: envEntry?.id ?? "pending", vault_ids: vaultIds };
+    const paused = !taskSettings(task).enabled;
+    const step = planStep(lock, { file: task.file, key: taskKey(task), kind: "deployment", body });
+    step.isChanged = step.action === "update";
+    if (step.action === "unchanged" && Boolean(step.entry.paused) !== paused) step.action = paused ? "pause" : "unpause";
+    steps.push(step);
+    if (dryRun || step.action === "unchanged") {
+      log(`${step.action.padEnd(9)} ${step.kind} ${step.entry?.id ?? task.name}`);
+      continue;
+    }
+
+    let result = step.action === "create" ? null : await currentDeployment(client, step);
+    const isReplacing = step.action !== "create" && !result;
+    if (!result) result = await call(step, () => client.beta.deployments.create(body));
+    else if (step.isChanged) {
+      // Updates keep any field they aren't sent, so a budget or description taken out of the file is cleared.
+      result = await call(step, () => client.beta.deployments.update(result.id, { ...body, budget: body.budget ?? null, description: body.description ?? null }));
+    }
+    if (paused && result.status === "active") result = await call(step, () => client.beta.deployments.pause(result.id));
+    else if (!paused && result.status === "paused") result = await call(step, () => client.beta.deployments.unpause(result.id));
+
+    lock.resources[step.key] = { kind: "deployment", id: result.id, hash: step.hash, paused };
+    await saveLock(lock);
+    const nextRun = result.schedule?.upcoming_runs_at?.[0];
+    const when = paused ? (step.action === "pause" ? null : "paused") : nextRun ? `next run ${nextRun}` : null;
+    const done = isReplacing ? `replaced` : { create: "created", update: "updated", pause: "paused", unpause: "unpaused" }[step.action];
+    log(`${done.padEnd(9)} deployment ${result.id}${isReplacing ? ` (${step.entry.id} was archived)` : ""}${when ? ` (${when})` : ""}`);
+  }
+
+  const wanted = new Set(instance.scheduled.map(taskKey));
+  for (const [key, entry] of Object.entries(lock.resources)) {
+    if (entry.kind !== "deployment" || wanted.has(key)) continue;
+    const step = { file: key.slice(2), key, kind: "deployment", action: "archive", entry };
+    steps.push(step);
+    if (dryRun) {
+      log(`archive   deployment ${entry.id}`);
+      continue;
+    }
+    await stopDeployment(client, step, "archive");
+    delete lock.resources[key];
+    await saveLock(lock);
+    log(`archived  deployment ${entry.id} (${step.file} is gone)`);
+  }
+  return steps;
+}
+
+// A deployment as it is now, or null if it's been deleted or archived, which makes it unusable.
+async function currentDeployment(client, step) {
+  try {
+    const remote = await client.beta.deployments.retrieve(step.entry.id);
+    return remote.archived_at ? null : remote;
+  } catch (err) {
+    if (err instanceof Anthropic.APIError && err.status === 404) return null;
+    throw apiError(step, err);
+  }
+}
+
+// Pauses or archives a deployment, unless it's already that way, or gone.
+async function stopDeployment(client, step, how) {
+  const remote = await currentDeployment(client, step);
+  if (!remote || (how === "pause" && remote.status === "paused")) return;
+  await call(step, () => client.beta.deployments[how](remote.id));
+}
+
+// Pauses the deployment of every scheduled task in a lock, such as when a host takes the agent
+// offline. The next deploy unpauses the ones whose files say they're enabled.
+export async function pauseScheduled({ lock, client, saveLock = () => {} }) {
+  for (const [key, entry] of Object.entries(lock?.resources ?? {})) {
+    if (entry.kind !== "deployment") continue;
+    await stopDeployment(client, { file: key.slice(2), key, kind: "deployment", entry }, "pause");
+    lock.resources[key] = { ...entry, paused: true };
+    await saveLock(lock);
+  }
+}
+
+// Archives the deployment of every scheduled task in a lock, for good, such as before a host deletes
+// the agent. The next deploy makes new ones.
+export async function archiveScheduled({ lock, client, saveLock = () => {} }) {
+  for (const [key, entry] of Object.entries(lock?.resources ?? {})) {
+    if (entry.kind !== "deployment") continue;
+    await stopDeployment(client, { file: key.slice(2), key, kind: "deployment", entry }, "archive");
+    delete lock.resources[key];
+    await saveLock(lock);
+  }
 }
 
 // Reads claude-lock.json, or starts a new lock, and checks it was written for this API.

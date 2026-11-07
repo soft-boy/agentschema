@@ -35,7 +35,7 @@ for (const page of DOCS) {
 
 test("the examples are where they say they are", () => {
   const all = DOCS.flatMap((page) => Object.keys(examplesIn(readFileSync(join(ROOT, page), "utf8"))));
-  for (const kind of ["agent.md", "env.md", "tools/", "skills/", "vaults/", "channels/"]) {
+  for (const kind of ["agent.md", "env.md", "tools/", "skills/", "vaults/", "channels/", "scheduled/"]) {
     assert.ok(all.some((path) => path.startsWith(kind)), `no example of ${kind}`);
   }
 });

@@ -24,7 +24,7 @@ Files that map to an API object are lenient, so a new API field works before age
 |---|---|
 | `agent.md`, `env.md`, and inside a credential's `auth` | A warning, and it's sent as written |
 | `vault.md`, and a credential's top level | A warning, and it isn't sent, although the warning currently says it is |
-| Tool files, `channels/` | An error |
+| Tool files, `channels/`, `scheduled/` | An error |
 
 `SKILL.md` frontmatter beyond `name` and `description` isn't checked.
 
@@ -39,6 +39,7 @@ Files that map to an API object are lenient, so a new API field works before age
 - A channel's instructions and the system prompt together fit the limit.
 - Two channels don't claim the same address.
 - A channel anyone can message doesn't have tools that act for you without asking.
+- A scheduled task's agent doesn't have tools that wait for an answer, since nobody's there to give one during a run. See [Scheduled tasks](scheduled.md#nobodys-there-to-answer).
 
 ## Limits
 
@@ -64,6 +65,8 @@ Files that map to an API object are lenient, so a new API field works before age
 | Credential `metadata` | 16 keys |
 | Channel name | 64 characters |
 | Channel `greeting` | 1,000 characters |
+| Scheduled task name | 64 characters |
+| Scheduled task `description` | 2,048 characters |
 
 ## What it can't tell you
 

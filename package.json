@@ -1,6 +1,6 @@
 {
   "name": "@soft-boy/agentschema",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Markdown based AI agent schema",
   "type": "module",
   "bin": {

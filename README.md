@@ -15,8 +15,10 @@ my-agent/
 ├── vaults/
 │   └── secrets/
 │       └── creds.md                  # a credential, without its secrets
-└── channels/
-    └── telegram.md                   # a place people can talk to it
+├── channels/
+│   └── telegram.md                   # a place people can talk to it
+└── scheduled/
+    └── good-morning.md               # a task it runs on a timetable
 ```
 
 **Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
@@ -154,12 +156,25 @@ allow: "*"
 You're chatting on Telegram. Keep replies short.
 ```
 
+### `scheduled/`
+
+Each `.md` file is a task the agent runs on a timetable, named after the file. The frontmatter says when, as a cron expression and a time zone, and the body is the message each run starts with. `deploy` turns each one into a Managed Agents deployment, so Anthropic starts the runs, and removing the file stops them. See [Scheduled tasks](docs/scheduled.md):
+
+```markdown
+---
+schedule: "0 8 * * 1-5"
+timezone: America/Los_Angeles
+---
+
+Say good morning in #gm.
+```
+
 ## Usage
 
 ```sh
 agentschema init <name>               # scaffold a new agent folder
 agentschema check [dir]               # validate the folder, no network
-agentschema deploy [dir]              # create or update the skills, agent, environment and vaults
+agentschema deploy [dir]              # create or update the agent and everything it needs, including scheduled tasks
 agentschema run [dir]                 # chat with the deployed agent in the terminal
 agentschema list                      # list the agents in your workspace
 agentschema delete <agent_id>         # archive an agent

@@ -47,6 +47,8 @@ my-agent/
 │       └── linear.md
 ├── channels/                         # places people can talk to it
 │   └── telegram.md
+├── scheduled/                        # tasks it runs on a timetable
+│   └── good-morning.md
 ├── claude-lock.json                  # the IDs from the last deploy, written for you
 └── .env                              # settings for your custom tools, never committed
 ```
@@ -69,6 +71,7 @@ my-agent/
 | `vaults/<name>/` | A vault | `deploy` |
 | `vaults/<name>/<credential>.md` | A credential | `cred deploy`, `cred login` or `cred create` |
 | `channels/<name>.md` | Nothing: a host reads these and connects them | Not sent |
+| `scheduled/<name>.md` | A deployment, which starts a session on its schedule | `deploy` |
 
 ## Words used in these docs
 
@@ -90,6 +93,7 @@ my-agent/
 - [`skills/`](skills.md): instructions loaded when needed
 - [`vaults/`](vaults.md): credentials
 - [`channels/`](channels.md): places people can talk to the agent
+- [`scheduled/`](scheduled.md): tasks it runs on a timetable
 
 **Using it**
 

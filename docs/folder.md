@@ -12,6 +12,7 @@
 | `skills/<name>/`, at any depth | [Skills](skills.md). Every file in the folder is uploaded |
 | `vaults/<vault>/` | [A vault and its credentials](vaults.md) |
 | `channels/` | [Channels](channels.md), directly inside the folder |
+| `scheduled/` | [Scheduled tasks](scheduled.md), directly inside the folder |
 
 Two more files can sit in the folder, and neither is part of the agent's definition:
 
@@ -22,7 +23,7 @@ Two more files can sit in the folder, and neither is part of the agent's definit
 
 - **Hidden files and `node_modules`** are never part of an agent, at any depth.
 - **Empty folders** aren't, because an agent is only a map of file paths.
-- **Symbolic links** are followed to files in `tools/`, `vaults/` and `channels/`. They aren't followed in `skills/`, because everything there gets uploaded, and a link could point outside the agent.
+- **Symbolic links** are followed to files in `tools/`, `vaults/`, `channels/` and `scheduled/`. They aren't followed in `skills/`, because everything there gets uploaded, and a link could point outside the agent.
 
 ## Names
 
@@ -43,6 +44,7 @@ Many things take their name from their file or folder, and if a file also states
 | Vault | Folder name | Nothing; `display_name` is refused |
 | Credential | File name | Nothing; `display_name` is refused |
 | Channel | File name | Nothing |
+| Scheduled task | File name | Nothing; it's also the deployment's name |
 
 Renaming a file or folder that the lock tracks makes a new resource, because the lock is keyed by path. See [Deploying and the lock](deploy.md#renaming-and-removing).
 
@@ -104,4 +106,4 @@ const files = {
 
 Paths are relative and use forward slashes. Contents are a string, or bytes (a `Uint8Array`) for files that may not be text. A folder on disk, a browser editor and a database row all have this in common, so nothing in agentschema's core needs to know where the files came from. See [Library](library.md).
 
-A path like `tools` with contents, rather than a folder, is an error: `tools: not a directory`. The same goes for `skills`, `vaults` and `channels`.
+A path like `tools` with contents, rather than a folder, is an error: `tools: not a directory`. The same goes for `skills`, `vaults`, `channels` and `scheduled`.

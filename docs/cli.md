@@ -26,7 +26,7 @@ Validates the folder without calling the API. It prints warnings and errors, and
 
 ### `deploy [dir]`
 
-Creates or updates the skills, environment, agent and vaults, and writes `claude-lock.json`. See [Deploying and the lock](deploy.md).
+Creates or updates the skills, environment, agent, vaults and [scheduled tasks](scheduled.md), and writes `claude-lock.json`. See [Deploying and the lock](deploy.md).
 
 | Option | What it does |
 |---|---|

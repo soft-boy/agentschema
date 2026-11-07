@@ -219,11 +219,11 @@ test("agentbook tools count, unless they never run on a live agent", () => {
 
 test("settings fill in each type's defaults, so hosts agree on them", () => {
   const settings = (front) => channelSettings(readChannels({ "channels/c.md": file(front) }).channels[0]);
-  assert.deepEqual(settings(VALID.telegram), { type: "telegram", enabled: true, allow: "*", respondTo: ["direct", "mention"], scope: "sender", expiresAfterMs: 86_400_000, approvals: "deny", limits: {}, greeting: null });
+  assert.deepEqual(settings(VALID.telegram), { type: "telegram", enabled: true, allow: "*", respondTo: ["direct", "mention"], dedicatedChannels: [], scope: "sender", expiresAfterMs: 86_400_000, approvals: "deny", limits: {}, greeting: null });
   assert.equal(settings('type: sendgrid\naddress: a@b.co\nallow: "*"').scope, "thread");
   assert.equal(settings('type: slack\nallow: "*"').scope, "thread");
   const custom = settings('type: slack\nallow: [U012AB3CD]\nenabled: false\nscope: room\nrespond_to: [all]\nexpires_after: 30m\napprovals: sender\nlimits: {messages_per_day: 5}\ngreeting: Hi');
-  assert.deepEqual(custom, { type: "slack", enabled: false, allow: ["U012AB3CD"], respondTo: ["all"], scope: "room", expiresAfterMs: 1_800_000, approvals: "sender", limits: { messages_per_day: 5 }, greeting: "Hi" });
+  assert.deepEqual(custom, { type: "slack", enabled: false, allow: ["U012AB3CD"], respondTo: ["all"], dedicatedChannels: [], scope: "room", expiresAfterMs: 1_800_000, approvals: "sender", limits: { messages_per_day: 5 }, greeting: "Hi" });
 });
 
 test("the system prompt is the agent's, then the channel's", () => {
@@ -269,4 +269,24 @@ test("answering everything without saying where gets a warning", () => {
   assert.match(warningsFor(front)[0], /every message in every channel/);
   assert.match(warningsFor('type: slack\nallow: "*"\nrespond_to: [all]')[0], /every message in every channel/);
   assert.deepEqual(warningsFor('type: telegram\nallow: "*"\nrespond_to: [all]'), []);
+});
+
+test("a Discord agent can have channels to itself, as well as or instead of answering elsewhere", () => {
+  const front = (rest) => `type: discord\napplication_id: "${ID}"\npublic_key: ${KEY}\nallow: "*"\n${rest}`;
+  const both = front(`dedicated_channels: ["${ID}"]\nrespond_to: [direct, mention, reply]`);
+  assert.deepEqual(errorsFor(both), []);
+  assert.deepEqual(warningsFor(both), []);
+  const settings = channelSettings(readChannels({ "channels/c.md": file(both) }).channels[0]);
+  assert.deepEqual(settings.dedicatedChannels, [ID]);
+  assert.deepEqual(settings.respondTo, ["direct", "mention", "reply"]);
+
+  const only = front(`dedicated_channels: ["${ID}"]\nrespond_to: []`);
+  assert.deepEqual(errorsFor(only), []);
+  assert.deepEqual(channelSettings(readChannels({ "channels/c.md": file(only) }).channels[0]).respondTo, []);
+
+  // With nowhere to answer at all, it's a mistake.
+  assert.match(errorsFor(front("respond_to: []"))[0], /`respond_to` must be a list/);
+  assert.match(errorsFor(front("dedicated_channels: []\nrespond_to: []"))[0], /`respond_to` must be a list/);
+  assert.match(errorsFor(front("dedicated_channels: [general]"))[0], /a numeric channel ID/);
+  assert.match(errorsFor('type: telegram\nallow: "*"\ndedicated_channels: ["1"]')[0], /unknown field `dedicated_channels`/);
 });

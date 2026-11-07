@@ -95,7 +95,7 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 
 | Export | What it does |
 |---|---|
-| `channelSettings(channel)` | How a channel behaves, with every default filled in: `{ type, enabled, allow, respondTo, scope, expiresAfterMs, approvals, limits, greeting }` |
+| `channelSettings(channel)` | How a channel behaves, with every default filled in: `{ type, enabled, allow, respondTo, dedicatedChannels, scope, expiresAfterMs, approvals, limits, greeting }` |
 | `channelSystem(agent, channel)` | The system prompt for a conversation on this channel |
 | `durationMs(value)` | `"24h"` in milliseconds, or null if it isn't a length of time |
 | `CHANNEL_TYPES` | What each type needs, including `CHANNEL_TYPES[type].secrets` |

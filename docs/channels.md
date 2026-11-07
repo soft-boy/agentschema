@@ -191,28 +191,28 @@ You're answering a slash command on Discord, so keep it under 2,000 characters.
 | **`application_id`** | Required. The Discord application's ID |
 | **`public_key`** | Required. The application's 64-character public key, which isn't secret |
 | **`guilds`** | The server IDs it may reply in |
-| **`channels`** | The channel IDs it may reply in, within those servers |
+| **`channels`** | The channel IDs it may answer mentions and replies in, within those servers |
+| **`dedicated_channels`** | Channels it has to itself. See below |
 | **`command`** | The slash command's name, like `ask` |
 | **`allow`** | Numeric user IDs in quotes |
 | **Secrets** | `bot_token` |
 
-To give an agent a channel of its own, where it answers everything, combine `all` with `channels`, and `scope: room` so everyone there shares one conversation:
+To give an agent a channel of its own, list it under `dedicated_channels`. It answers every message there, in one conversation that everyone shares, and it's told who said what. `respond_to` still applies everywhere else, so this agent also answers DMs, mentions and replies:
 
 ```markdown path=channels/front-desk.md
 ---
 type: discord
 application_id: "223456789012345678"
 public_key: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
-channels: ["123456789012345678"]
-respond_to: [all]
-scope: room
+dedicated_channels: ["123456789012345678"]
+respond_to: [direct, mention, reply]
 allow: "*"
 ---
 
-You're in your own Discord channel, so everyone here is talking to you.
+You're on Discord, and one channel there is your own, so everyone in it is talking to you.
 ```
 
-`channels` only limits servers, so `all` still answers DMs too. Reading every message in a channel needs Discord's Message Content Intent, which is on the bot's page in the Developer Portal. Without it, Discord only shows a bot the messages that mention it.
+To answer only in those channels, and nowhere else, write `respond_to: []`. `channels` doesn't limit dedicated channels. Reading every message in a channel needs Discord's Message Content Intent, which is on the bot's page in the Developer Portal. Without it, Discord only shows a bot the messages that mention it.
 
 ## Secrets
 

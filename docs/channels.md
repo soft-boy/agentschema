@@ -2,7 +2,7 @@
 
 Places people can talk to the agent, such as Telegram, SMS, email, Slack or Discord. Each `.md` file directly in `channels/` is a channel, named after the file, so an agent can have two Telegram bots.
 
-**Status:** a draft. `check` validates all five types. [Agentbook](https://tryagentbook.com) connects `telegram`, and nothing connects the others yet.
+**Status:** a draft. `check` validates all five types. [Agentbook](https://tryagentbook.com) connects `telegram` and `discord`, and nothing connects the others yet.
 
 ```markdown path=channels/telegram.md
 ---
@@ -49,7 +49,7 @@ A field that isn't listed for the channel's type is an error, so a typo like `ap
 
 ### `respond_to`
 
-A list of `direct`, `mention`, `reply` or `all`, where `all` goes on its own. It only applies to channels with group chats, which are Telegram and Slack. Elsewhere it's a warning.
+A list of `direct`, `mention`, `reply` or `all`, where `all` goes on its own. It only applies to channels with group chats, which are Telegram, Slack and Discord. Elsewhere it's a warning.
 
 ### `scope`
 
@@ -91,7 +91,7 @@ Each type has its own fields, its own format for `allow`, and its own secrets. V
 | `twilio` | `sender` | `deny`, `sender` | No |
 | `sendgrid` | `thread`, `sender` | `deny` | No |
 | `slack` | `thread`, `sender`, `room` | `deny`, `sender` | Yes |
-| `discord` | `sender`, `room` | `deny`, `sender` | No |
+| `discord` | `sender`, `room` | `deny`, `sender` | Yes |
 
 ### `telegram`
 
@@ -171,7 +171,7 @@ You're in a team's Slack. Reply in the thread, and keep it brief.
 
 ### `discord`
 
-Reading ordinary messages takes an always-on connection, so people talk to a Discord agent with a slash command.
+People can talk to a Discord agent with a slash command, by DM, and in a server by mentioning it or replying to it. A slash command only needs a webhook, and the rest needs a host that keeps a live connection to Discord.
 
 ```markdown path=channels/server.md
 ---
@@ -191,9 +191,28 @@ You're answering a slash command on Discord, so keep it under 2,000 characters.
 | **`application_id`** | Required. The Discord application's ID |
 | **`public_key`** | Required. The application's 64-character public key, which isn't secret |
 | **`guilds`** | The server IDs it may reply in |
+| **`channels`** | The channel IDs it may reply in, within those servers |
 | **`command`** | The slash command's name, like `ask` |
 | **`allow`** | Numeric user IDs in quotes |
 | **Secrets** | `bot_token` |
+
+To give an agent a channel of its own, where it answers everything, combine `all` with `channels`, and `scope: room` so everyone there shares one conversation:
+
+```markdown path=channels/front-desk.md
+---
+type: discord
+application_id: "223456789012345678"
+public_key: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+channels: ["123456789012345678"]
+respond_to: [all]
+scope: room
+allow: "*"
+---
+
+You're in your own Discord channel, so everyone here is talking to you.
+```
+
+`channels` only limits servers, so `all` still answers DMs too. Reading every message in a channel needs Discord's Message Content Intent, which is on the bot's page in the Developer Portal. Without it, Discord only shows a bot the messages that mention it.
 
 ## Secrets
 

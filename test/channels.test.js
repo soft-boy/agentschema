@@ -249,3 +249,24 @@ test("every type says which secrets its host has to ask for", () => {
     discord: ["bot_token"],
   });
 });
+
+test("a Discord agent can have a channel of its own, where it answers everything", () => {
+  const front = `type: discord\napplication_id: "${ID}"\npublic_key: ${KEY}\nchannels: ["${ID}"]\nrespond_to: [direct, all]\nscope: room\nallow: "*"`;
+  assert.match(errorsFor(front)[0] ?? "", /list it on its own/);
+  const own = front.replace("[direct, all]", "[all]");
+  assert.deepEqual(errorsFor(own), []);
+  assert.deepEqual(warningsFor(own), []);
+  assert.equal(channelSettings(readChannels({ "channels/c.md": file(own) }).channels[0]).scope, "room");
+  assert.match(errorsFor(own.replace(`channels: ["${ID}"]`, "channels: [general]"))[0], /a numeric channel ID/);
+});
+
+test("on Discord, respond_to means something now", () => {
+  assert.deepEqual(warningsFor(`type: discord\napplication_id: "${ID}"\npublic_key: ${KEY}\nrespond_to: [direct, reply]\nallow: "*"`), []);
+});
+
+test("answering everything without saying where gets a warning", () => {
+  const front = `type: discord\napplication_id: "${ID}"\npublic_key: ${KEY}\nrespond_to: [all]\nallow: "*"`;
+  assert.match(warningsFor(front)[0], /every message in every channel/);
+  assert.match(warningsFor('type: slack\nallow: "*"\nrespond_to: [all]')[0], /every message in every channel/);
+  assert.deepEqual(warningsFor('type: telegram\nallow: "*"\nrespond_to: [all]'), []);
+});

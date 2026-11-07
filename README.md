@@ -145,7 +145,7 @@ auth:
 
 ### `channels/`
 
-Each `.md` file is a place people can talk to the agent: `telegram`, `twilio`, `sendgrid`, `slack` or `discord`. The frontmatter says who can use it and how it behaves, and the body is added to the system prompt there. `check` validates these files, but `deploy` and `run` don't connect them, because that takes a host that's always on. See [Channels](docs/channels.md):
+Each `.md` file is a place people can talk to the agent: `telegram`, `twilio`, `sendgrid`, `email`, `slack` or `discord`. The frontmatter says who can use it and how it behaves, and the body is added to the system prompt there. `check` validates these files, but `deploy` and `run` don't connect them, because that takes a host that's always on. See [Channels](docs/channels.md):
 
 ```markdown
 ---

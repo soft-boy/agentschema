@@ -18,6 +18,7 @@ const VALID = {
   twilio: 'type: twilio\ntransport: sms\nfrom: "+14155550123"\nallow: ["+14155550199"]\napprovals: sender',
   whatsapp: 'type: twilio\ntransport: whatsapp\nfrom: "+14155550123"\nallow: "*"',
   sendgrid: 'type: sendgrid\naddress: help@agent.example.com\nfrom_name: Help\nallow: ["me@example.com", "*@example.com"]',
+  email: 'type: email\nfrom_name: Help\nallow: ["me@example.com", "*@example.com"]',
   slack: "type: slack\nchannels: [C012AB3CD]\nallow: [U012AB3CD]\nrespond_to: [mention]",
   discord: `type: discord\napplication_id: "${ID}"\npublic_key: ${KEY}\nguilds: ["${ID}"]\ncommand: ask\nallow: ["${ID}"]`,
 };
@@ -67,7 +68,7 @@ test("a channel's name has to work in addresses", () => {
 });
 
 test("type is required, and must be one we know", () => {
-  assert.match(errorsFor('allow: "*"')[0], /`type` must be `telegram`, `twilio`, `sendgrid`, `slack`, `discord`/);
+  assert.match(errorsFor('allow: "*"')[0], /`type` must be `telegram`, `twilio`, `sendgrid`, `email`, `slack`, `discord`/);
   assert.match(errorsFor('type: fax\nallow: "*"')[0], /`type` must be/);
   assert.match(errorsFor('type: constructor\nallow: "*"')[0], /`type` must be/);
 });
@@ -221,6 +222,11 @@ test("settings fill in each type's defaults, so hosts agree on them", () => {
   const settings = (front) => channelSettings(readChannels({ "channels/c.md": file(front) }).channels[0]);
   assert.deepEqual(settings(VALID.telegram), { type: "telegram", enabled: true, allow: "*", respondTo: ["direct", "mention"], dedicatedChannels: [], sendTo: [], scope: "sender", expiresAfterMs: 86_400_000, approvals: "deny", limits: {}, greeting: null });
   assert.equal(settings('type: sendgrid\naddress: a@b.co\nallow: "*"').scope, "thread");
+  assert.equal(settings('type: email\nallow: "*"').scope, "thread");
+  // An email thread can go quiet for days, so it lasts longer.
+  assert.equal(settings('type: email\nallow: "*"').expiresAfterMs, 604_800_000);
+  assert.equal(settings('type: sendgrid\naddress: a@b.co\nallow: "*"').expiresAfterMs, 604_800_000);
+  assert.equal(settings('type: email\nallow: "*"\nexpires_after: 2h').expiresAfterMs, 7_200_000);
   assert.equal(settings('type: slack\nallow: "*"').scope, "thread");
   const custom = settings('type: slack\nallow: [U012AB3CD]\nenabled: false\nscope: room\nrespond_to: [all]\nexpires_after: 30m\napprovals: sender\nlimits: {messages_per_day: 5}\ngreeting: Hi');
   assert.deepEqual(custom, { type: "slack", enabled: false, allow: ["U012AB3CD"], respondTo: ["all"], dedicatedChannels: [], sendTo: [], scope: "room", expiresAfterMs: 1_800_000, approvals: "sender", limits: { messages_per_day: 5 }, greeting: "Hi" });
@@ -245,6 +251,7 @@ test("every type says which secrets its host has to ask for", () => {
     telegram: ["bot_token"],
     twilio: ["account_sid", "auth_token"],
     sendgrid: ["api_key"],
+    email: [],
     slack: ["bot_token", "signing_secret"],
     discord: ["bot_token"],
   });
@@ -311,4 +318,22 @@ test("only one bot can post in a channel, so it's clear which one does", () => {
   const front = (id) => `type: discord\napplication_id: "${id}"\npublic_key: ${KEY}\nallow: "*"\nsend_to: ["${ID}"]`;
   const { errors } = checked({ "channels/a.md": file(front("323456789012345678")), "channels/b.md": file(front("423456789012345678")) });
   assert.deepEqual(errors, [`channels/b.md: \`send_to\`: ${ID} is already in channels/a.md, and only one bot can post there`]);
+});
+
+test("an email channel's host gives it an address, so it doesn't need one in the file", () => {
+  assert.deepEqual(errorsFor('type: email\nallow: "*"'), []);
+  assert.deepEqual(errorsFor('type: email\naddress: sarah@agent.example.com\nallow: "*"'), []);
+  assert.match(errorsFor('type: email\naddress: nope\nallow: "*"')[0], /`address` must be an email address/);
+  assert.match(errorsFor('type: email\nallow: ["*"]')[0], /on its own/);
+  assert.match(errorsFor("type: email\nallow: [nobody]")[0], /an email address/);
+  assert.match(errorsFor('type: email\nallow: ["a@b.co"]\napprovals: sender')[0], /`approvals` must be `deny` on email/);
+  assert.match(errorsFor('type: email\nallow: "*"\napi_key: x')[0], /unknown field `api_key`/);
+  assert.match(warningsFor('type: email\nallow: "*"\nrespond_to: [all]')[0], /no effect on email/);
+});
+
+test("two email channels can't claim one address, but can both leave it to the host", () => {
+  const two = (a, b) => checked({ "channels/a.md": file(a), "channels/b.md": file(b) }).errors;
+  assert.deepEqual(two('type: email\nallow: "*"', 'type: email\nallow: ["a@b.co"]'), []);
+  assert.deepEqual(two('type: email\naddress: a@agent.example.com\nallow: "*"', 'type: email\naddress: b@agent.example.com\nallow: "*"'), []);
+  assert.match(two('type: email\naddress: a@agent.example.com\nallow: "*"', 'type: email\naddress: a@agent.example.com\nallow: "*"')[0], /already uses this/);
 });

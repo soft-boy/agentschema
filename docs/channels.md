@@ -2,7 +2,7 @@
 
 Places people can talk to the agent, such as Telegram, SMS, email, Slack or Discord. Each `.md` file directly in `channels/` is a channel, named after the file, so an agent can have two Telegram bots.
 
-**Status:** a draft. `check` validates all five types. [Agentbook](https://tryagentbook.com) connects `telegram` and `discord`, and nothing connects the others yet.
+**Status:** a draft. `check` validates all six types. [Agentbook](https://tryagentbook.com) connects `telegram`, `discord` and `email`, and nothing connects the others yet.
 
 ```markdown path=channels/telegram.md
 ---
@@ -31,12 +31,12 @@ A session can override `system` for itself, so a channel doesn't need its own co
 
 | Field | Required | Default | What it does |
 |---|---|---|---|
-| `type` | Yes | | `telegram`, `twilio`, `sendgrid`, `slack` or `discord` |
+| `type` | Yes | | `telegram`, `twilio`, `sendgrid`, `email`, `slack` or `discord` |
 | `allow` | Yes | | Who can talk to it: `"*"` for anyone, or a list |
 | `enabled` | No | `true` | Turns the channel off without deleting it |
 | `respond_to` | No | `[direct, mention]` | What it answers in group chats |
 | `scope` | No | Depends on the type | What counts as one conversation |
-| `expires_after` | No | `24h` | How long a quiet conversation lasts before the next message starts fresh |
+| `expires_after` | No | `24h`, or `7d` for email | How long a quiet conversation lasts before the next message starts fresh |
 | `approvals` | No | `deny` | What happens when a tool needs approval |
 | `limits` | No | The host's own | Message caps |
 | `greeting` | No | | The first message a new person gets, up to 1,000 characters |
@@ -91,6 +91,7 @@ Each type has its own fields, its own format for `allow`, and its own secrets. V
 | `telegram` | `sender`, `room` | `deny`, `sender` | Yes |
 | `twilio` | `sender` | `deny`, `sender` | No |
 | `sendgrid` | `thread`, `sender` | `deny` | No |
+| `email` | `thread`, `sender` | `deny` | No |
 | `slack` | `thread`, `sender`, `room` | `deny`, `sender` | Yes |
 | `discord` | `sender`, `room` | `deny`, `sender` | Yes |
 
@@ -150,6 +151,29 @@ You're replying by email, so write in full sentences and sign off with your name
 | **Secrets** | `api_key` |
 
 A sender's address can be forged, so a list here isn't proof of who's writing. Don't give an email channel tools that act for you without asking.
+
+### `email`
+
+Email at an address the host gives the agent, such as Agentbook's `<agent>@agent.tryagentbook.com`. The host sends and receives the email itself, so there's no account to connect.
+
+```markdown path=channels/inbox.md
+---
+type: email
+from_name: Sarah
+allow: "*"
+---
+
+You're replying by email, so write a complete reply in full sentences, and sign off with your name.
+```
+
+| | |
+|---|---|
+| **`address`** | The address, if the host lets you choose it or checks it. Otherwise the host fills it in |
+| **`from_name`** | The name replies come from |
+| **`allow`** | Email addresses, or `*@` and a domain |
+| **Secrets** | None |
+
+As with `sendgrid`, a sender's address can be forged, so a host should only answer email whose sender it can verify, such as by DKIM or DMARC.
 
 ### `slack`
 
@@ -255,7 +279,7 @@ That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to
 
 - A channel's name is its file name, and may use lowercase letters, digits, `_` and `-`, up to 64 characters, because hosts use it in addresses.
 - `channels/` is flat, so a folder inside it is an error. Files that aren't `.md` are ignored.
-- Two files can't claim the same Twilio number and transport, the same email address, or the same Discord application.
+- Two files can't claim the same Twilio number and transport, the same email address, or the same Discord application. Email files that leave `address` to the host don't count.
 
 ## What doesn't belong in the file
 
@@ -269,7 +293,7 @@ Read a channel with `readChannels(files)`, and get its behavior with `channelSet
 
 - Treat a channel like a public page: run the deployed version, on the same copy of the agent, and enforce your own limits.
 - Acknowledge a provider's webhook quickly and do the work afterwards, because providers retry, and a retry shouldn't start a second reply.
-- Verify each provider's signature on incoming messages before trusting them.
+- Verify each provider's signature on incoming messages before trusting them. For email, also check the sender passed DKIM or DMARC, or someone can write as anyone, and the agent replies to whoever they named.
 - Post only in the places a channel's `send_to` lists, and only while the channel is enabled. Turn mentions off, so that an agent can't be talked into pinging everyone.
 - Visitors should only see the agent's words, not tool calls or error details.
 - Check each provider's own docs when you build for it. Each has its own rules on setup, message length and sign-up, such as registering to send SMS in the US, or receiving email on a subdomain.

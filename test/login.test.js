@@ -15,8 +15,9 @@ import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 // A local MCP server and authorization server: protected resource metadata, authorization
 // server metadata, client registration, an authorize endpoint that approves at once, and a
-// token endpoint that checks the PKCE verifier.
-async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/mcp", tools = null } = {}) {
+// token endpoint that checks the PKCE verifier. With `metadataAt`, the protected resource metadata
+// is only there, and the MCP server's 401 is the one place that says so.
+async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/mcp", tools = null, metadataAt = null } = {}) {
   const seen = { authorize: null, token: null, registered: null, toolsAuthorization: null };
   const challenges = new Map();
   const server = createServer(async (req, res) => {
@@ -25,6 +26,9 @@ async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/
     let body = "";
     for await (const chunk of req) body += chunk;
 
+    if (metadataAt && url.pathname === path && req.method === "POST" && !req.headers.authorization) {
+      return res.writeHead(401, { "www-authenticate": `Bearer realm="mcp", resource_metadata="${origin}${metadataAt}"` }).end();
+    }
     // The MCP server itself: it only says what it offers to someone signed in.
     if (tools && url.pathname === path && req.method === "POST") {
       const message = JSON.parse(body);
@@ -34,7 +38,7 @@ async function fakeOAuth({ registration = true, refreshToken = "rt_1", path = "/
       const result = message.method === "tools/list" ? { tools: tools.map((name) => ({ name })) } : { protocolVersion: "2025-06-18", capabilities: {} };
       return json(200, { jsonrpc: "2.0", id: message.id, result });
     }
-    if (url.pathname === `/.well-known/oauth-protected-resource${path}`) {
+    if (url.pathname === (metadataAt ?? `/.well-known/oauth-protected-resource${path}`)) {
       return json(200, { resource: `${origin}${path}`, authorization_servers: [`${origin}/auth`], scopes_supported: ["read", "write"] });
     }
     if (url.pathname === "/.well-known/oauth-authorization-server/auth") {
@@ -145,6 +149,34 @@ test("cred login registers a client, signs in with PKCE, and writes the refresh 
   } finally {
     await oauth.close();
   }
+});
+
+test("cred login finds a sign-in that only the server's 401 points to", async () => {
+  const oauth = await fakeOAuth({ metadataAt: "/mcp/.well-known/oauth-protected-resource" });
+  try {
+    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Brokers.md": credFile(oauth.url) });
+    await credLogin(join(dir, "vaults/Ops/Brokers.md"), { client: fakeClient(), ask: noSecrets, openBrowser: browser });
+    assert.equal(oauth.seen.authorize.client_id, "dyn_client");
+    assert.equal(oauth.seen.authorize.resource, oauth.url);
+  } finally {
+    await oauth.close();
+  }
+});
+
+test("discover reads a resource_metadata link written without quotes", async () => {
+  const { discover } = await import("../src/oauth.js");
+  const metadata = "https://api.example/v1/mcp/.well-known/oauth-protected-resource";
+  const fakeFetch = async (url, init = {}) => {
+    if (init.method === "POST") return new Response(null, { status: 401, headers: { "www-authenticate": `Bearer resource_metadata=${metadata}, error="invalid_token"` } });
+    if (url === metadata) return Response.json({ resource: "https://api.example/v1/mcp", authorization_servers: ["https://auth.example"] });
+    if (url === "https://auth.example/.well-known/oauth-authorization-server") {
+      return Response.json({ issuer: "https://auth.example", authorization_endpoint: "https://auth.example/authorize", token_endpoint: "https://auth.example/token", registration_endpoint: "https://auth.example/register" });
+    }
+    return new Response(null, { status: 404 });
+  };
+  const server = await discover("https://api.example/v1/mcp", { fetch: fakeFetch });
+  assert.equal(server.resource, "https://api.example/v1/mcp");
+  assert.equal(server.registrationEndpoint, "https://auth.example/register");
 });
 
 test("cred login uses the file's own client, asking for its secret", async () => {

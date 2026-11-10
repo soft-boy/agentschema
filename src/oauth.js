@@ -18,8 +18,12 @@ export async function discover(serverUrl, { fetch = globalThis.fetch } = {}) {
   const url = new URL(serverUrl);
   const path = url.pathname.replace(/\/$/, "");
 
-  // Protected resource metadata (RFC 9728): which authorization server the MCP server trusts.
+  // Protected resource metadata (RFC 9728): which authorization server the MCP server trusts. The
+  // server can say where that is when it turns away a request with no token, and some put it where
+  // the well-known addresses below wouldn't find it, so its word comes first.
+  const hinted = await resourceMetadataHint(serverUrl, fetch);
   const resourceMeta =
+    (hinted && (await getJSON(hinted, fetch))) ||
     (path && (await getJSON(`${url.origin}/.well-known/oauth-protected-resource${path}`, fetch))) ||
     (await getJSON(`${url.origin}/.well-known/oauth-protected-resource`, fetch));
   const issuer = resourceMeta?.authorization_servers?.[0] ?? url.origin;
@@ -51,6 +55,25 @@ export async function discover(serverUrl, { fetch = globalThis.fetch } = {}) {
     registrationEndpoint: meta.registration_endpoint ?? null,
     codeChallengeMethods: meta.code_challenge_methods_supported ?? null,
   };
+}
+
+// Where the MCP server's 401 says its protected resource metadata is: the resource_metadata
+// parameter of its WWW-Authenticate header. Returns null when it doesn't say.
+async function resourceMetadataHint(serverUrl, fetch) {
+  try {
+    const res = await fetch(serverUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "agentschema", version: "0" } } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status !== 401) return null;
+    const match = /\bresource_metadata\s*=\s*(?:"([^"]*)"|([^\s,]+))/i.exec(res.headers.get("www-authenticate") ?? "");
+    const hint = match?.[1] ?? match?.[2];
+    return hint && URL.canParse(hint) ? hint : null;
+  } catch {
+    return null;
+  }
 }
 
 async function getJSON(url, fetch) {

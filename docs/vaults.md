@@ -125,7 +125,7 @@ A credential that already exists can't be created again. To replace its secrets,
 
 `cred login` follows the MCP authorization spec:
 
-1. **It finds the sign-in** from the server's URL, using protected resource metadata (RFC 9728), then authorization server metadata (RFC 8414) or OpenID Connect discovery.
+1. **It finds the sign-in** from the server's URL, using protected resource metadata (RFC 9728), then authorization server metadata (RFC 8414) or OpenID Connect discovery. It looks for that metadata where the server's 401 says it is (the `resource_metadata` in its `WWW-Authenticate` header) before trying the well-known addresses.
 2. **It finds an OAuth client.** That's the file's `auth.refresh.client_id` if there is one. Otherwise, if the server allows it, agentschema registers itself as a client (RFC 7591), and writes the `refresh` block into the file. If neither works, it explains how to create your own client and what to add.
 3. **It signs you in with the browser,** using the authorization code flow with PKCE (S256), and receiving the code on `http://127.0.0.1:<port>/callback`. It waits up to 5 minutes. Use `--port` if your OAuth client needs a fixed redirect URI.
 4. **It sends the tokens straight to the vault,** and never writes them to disk.

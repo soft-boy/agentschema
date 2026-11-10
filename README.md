@@ -28,8 +28,6 @@ my-agent/
     └── good-morning.md               # a task it runs on a timetable
 ```
 
-**Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
-
 ## Table of contents
 
 - [Philosophy](#philosophy)

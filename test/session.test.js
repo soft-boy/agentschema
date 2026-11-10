@@ -274,7 +274,7 @@ test("run opts in to deltas and streams the reply into the terminal", async () =
 });
 
 test("a session can have its own system prompt, without changing the agent", async () => {
-  const lock = { resources: { "./agent.md": { id: "agent_1", version: "4" }, "./env.md": { id: "env_1" } } };
+  const lock = { resources: { "./agent.md": { id: "agent_1", version: "4" }, "./computer.md": { id: "env_1" } } };
   const created = [];
   const client = { beta: { sessions: { create: async (params) => (created.push(params), { id: "sesn_1" }) } } };
 

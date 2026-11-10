@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CHANNELS_DIR } from "../lib/channels.js";
 import { editFrontmatter } from "../lib/markdown.js";
-import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
+import { AGENT_FILE, COMPUTER_FILE, OLD_COMPUTER_FILE } from "../lib/instance.js";
 import { SCHEDULED_DIR } from "../lib/scheduled.js";
 import { SKILLS_DIR } from "../lib/skills.js";
 import { SYSTEM_PROMPT_DIR } from "../lib/system-prompt.js";
@@ -10,7 +10,7 @@ import { TOOLS_DIR } from "../lib/tools.js";
 import { VAULTS_DIR } from "../lib/vaults.js";
 
 const FOLDERS = [TOOLS_DIR, SKILLS_DIR, VAULTS_DIR, CHANNELS_DIR, SCHEDULED_DIR, SYSTEM_PROMPT_DIR];
-const TOP_LEVEL_FILES = [AGENT_FILE, ENV_FILE];
+const TOP_LEVEL_FILES = [AGENT_FILE, COMPUTER_FILE, OLD_COMPUTER_FILE];
 
 // Why `dir` can't be read as an agent folder, or null when it can.
 export function folderProblem(dir) {

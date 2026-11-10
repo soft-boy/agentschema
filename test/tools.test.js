@@ -37,7 +37,7 @@ module.exports = readFile;
 \`\`\`
 `;
 
-const folder = (tools) => instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, ...tools });
+const folder = (tools) => instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...tools });
 const errorsFor = (tools) => check(folder(tools)).errors;
 
 test("tools compile to one toolset entry, then custom tools, sorted by name", () => {
@@ -68,14 +68,14 @@ test("tools compile to one toolset entry, then custom tools, sorted by name", ()
 });
 
 test("no tools/ folder sends an empty tools list", () => {
-  const { errors, instance: inst } = check(instance({ "agent.md": AGENT_MD, "env.md": ENV_MD }));
+  const { errors, instance: inst } = check(instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD }));
   assert.deepEqual(errors, []);
   assert.deepEqual(agentBody(inst).tools, []);
 });
 
 test("tools in agent.md's frontmatter are an error", () => {
   const md = AGENT_MD.replace("model: claude-opus-5-5\n", "model: claude-opus-5-5\ntools: []\n");
-  assert.match(check(instance({ "agent.md": md, "env.md": ENV_MD })).errors[0], /define each tool as a file in tools\//);
+  assert.match(check(instance({ "agent.md": md, "computer.md": ENV_MD })).errors[0], /define each tool as a file in tools\//);
 });
 
 test("the pre-built toolset file is checked", () => {

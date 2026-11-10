@@ -69,7 +69,7 @@ A server and its tools are declared separately, and the API rejects an agent if 
 - Each server here needs a file in `tools/` with `type: mcp_toolset`, named after the server.
 - Each such file needs a server here.
 
-If `env.md` has limited networking and doesn't allow the server's host, sessions can't start, so `check` warns. To fix it, set `config.networking.allow_mcp_servers` to `true` in `env.md`, or add the host to `allowed_hosts`.
+If `computer.md` has limited networking and doesn't allow the server's host, sessions can't start, so `check` warns. To fix it, set `config.networking.allow_mcp_servers` to `true` in `computer.md`, or add the host to `allowed_hosts`.
 
 An MCP server that needs signing in also needs a [credential](vaults.md).
 

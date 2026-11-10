@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { AGENT_FILE, agentBody, envBody, environmentEntry } from "../lib/instance.js";
 import { SYSTEM_PROMPT_DIR } from "../lib/system-prompt.js";
 import { skillKey, skillRefs } from "../lib/skills.js";
 import { TOOLS_DIR } from "../lib/tools.js";
@@ -20,7 +20,7 @@ export async function openSession(dir, { client, sessionId }) {
 
   const lock = readLock(dir);
   const agent = lock?.resources?.[`./${AGENT_FILE}`];
-  const env = lock?.resources?.[`./${ENV_FILE}`];
+  const env = environmentEntry(lock);
   if (!agent || !env) {
     throw new SessionError(`${dir} hasn't been deployed (no agent or environment in ${LOCK_FILE}); run agentschema deploy first`);
   }
@@ -34,7 +34,7 @@ export async function openSession(dir, { client, sessionId }) {
     for (const skill of instance.skills) {
       if (hashBody(skillFingerprint(skill)) !== lock.resources[skillKey(skill)]?.hash) notes.push(`${skill.path} has changed since the last deploy`);
     }
-    if (hashBody(envBody(instance)) !== env.hash) notes.push(`${ENV_FILE} has changed since the last deploy`);
+    if (hashBody(envBody(instance)) !== env.hash) notes.push(`${instance.env.file} has changed since the last deploy`);
     if (notes.length > 0) notes.push(`this session uses the deployed version; run agentschema deploy to pick up the changes`);
   }
 
@@ -60,7 +60,7 @@ export async function openSession(dir, { client, sessionId }) {
 // Returns { session, notes }.
 export async function startSession({ instance, lock, client, agentVersion, system, title, budget, pathOf = (file) => file }) {
   const agent = lock?.resources?.[`./${AGENT_FILE}`];
-  const env = lock?.resources?.[`./${ENV_FILE}`];
+  const env = environmentEntry(lock);
   if (!agent || !env) throw new SessionError("this agent hasn't been deployed (no agent or environment in its lock)");
 
   const pinned = { id: agent.id, version: Number(agentVersion ?? agent.version) };

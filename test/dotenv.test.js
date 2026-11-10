@@ -37,7 +37,7 @@ test("a variable set in the shell wins, and a missing file is fine", () => {
 test("run gives the folder's .env to custom tools, but not to the Anthropic client", async () => {
   const dir = folder();
   writeFileSync(join(dir, "agent.md"), AGENT_MD);
-  writeFileSync(join(dir, "env.md"), ENV_MD);
+  writeFileSync(join(dir, "computer.md"), ENV_MD);
   mkdirSync(join(dir, "tools"));
   writeFileSync(join(dir, "tools/report.md"), [
     "---", "type: custom", "name: report", "description: Report settings.", "---", "", "## Code", "", "```javascript",
@@ -46,7 +46,7 @@ test("run gives the folder's .env to custom tools, but not to the Anthropic clie
   writeFileSync(join(dir, ".env"), "FROM_FILE=file\nFROM_SHELL=file\nANTHROPIC_API_KEY=key_from_dotenv\n");
   writeFileSync(join(dir, "claude-lock.json"), JSON.stringify({
     version: 1,
-    resources: { "./agent.md": { kind: "agent", id: "agent_1", version: "1", hash: "x" }, "./env.md": { kind: "environment", id: "env_1", hash: "x" } },
+    resources: { "./agent.md": { kind: "agent", id: "agent_1", version: "1", hash: "x" }, "./computer.md": { kind: "environment", id: "env_1", hash: "x" } },
   }));
 
   const keys = new Set();

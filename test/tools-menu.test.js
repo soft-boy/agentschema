@@ -17,7 +17,7 @@ const menu = (lines) => {
   input.end(lines.map((l) => `${l}\n`).join(""));
   return prompts(input, new PassThrough());
 };
-const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, ...files });
+const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...files });
 
 test("tools create writes the pre-built toolset, with the tools you pick", async () => {
   const dir = folder();
@@ -124,7 +124,7 @@ test("an MCP server that won't list its tools gets no table, and the permission 
     assert.deepEqual(errors, []);
     assert.deepEqual(agentBody(inst).tools, [{ type: "mcp_toolset", mcp_server_name: "example", default_config: { permission_policy: { type: "always_allow" } } }]);
     assert.match(warnings.join("\n"), /limited networking doesn't allow MCP server `example` \(127\.0\.0\.1:\d+\)/);
-    assert.match(lines.join("\n"), /warning: env\.md: .*limited networking/);
+    assert.match(lines.join("\n"), /warning: computer\.md: .*limited networking/);
   } finally {
     await server.close();
   }
@@ -141,7 +141,7 @@ test("the default name for an MCP server comes from its URL", async () => {
 test("tools create declares the server in agent.md, keeping the rest of the file", async () => {
   const offline = async () => { throw new Error("offline"); };
   const agent = "---\nname: Helper # keep this comment\nmodel: claude-opus-5-5\ndescription: " + "a long description ".repeat(10).trim() + "\n---\n\nYou are helpful.\n\n---\n\nStill the prompt.\n";
-  const dir = instance({ "agent.md": agent, "env.md": ENV_MD });
+  const dir = instance({ "agent.md": agent, "computer.md": ENV_MD });
   await toolsCreate(dir, { io: menu(["3", "https://a.example/mcp", "first", "1"]), fetch: offline });
   await toolsCreate(dir, { io: menu(["3", "https://b.example/mcp", "second", "1"]), fetch: offline });
 
@@ -163,7 +163,7 @@ test("tools create declares the server in agent.md, keeping the rest of the file
 test("a server agent.md already declares only gets its toolset file", async () => {
   const offline = async () => { throw new Error("offline"); };
   const agent = AGENT_MD.replace("model: claude-opus-5-5\n", "model: claude-opus-5-5\nmcp_servers:\n  - type: url\n    name: linear\n    url: https://mcp.linear.app/mcp\n");
-  const dir = instance({ "agent.md": agent, "env.md": ENV_MD });
+  const dir = instance({ "agent.md": agent, "computer.md": ENV_MD });
   // kind, URL, permission: no name question, since agent.md has it
   await toolsCreate(dir, { io: menu(["3", "https://mcp.linear.app/mcp", "1"]), fetch: offline });
   assert.equal(readFileSync(join(dir, "agent.md"), "utf8"), agent);
@@ -175,7 +175,7 @@ test("a server agent.md already declares only gets its toolset file", async () =
 test("MCP servers and their toolset files are checked against each other", () => {
   const server = "mcp_servers:\n  - type: url\n    name: x\n    url: https://a.example/mcp\n";
   const agent = AGENT_MD.replace("model: claude-opus-5-5\n", `model: claude-opus-5-5\n${server}`);
-  const errs = (md, a = agent) => check(instance({ "agent.md": a, "env.md": ENV_MD, ...(md ? { "tools/x.md": md } : {}) })).errors.join("\n");
+  const errs = (md, a = agent) => check(instance({ "agent.md": a, "computer.md": ENV_MD, ...(md ? { "tools/x.md": md } : {}) })).errors.join("\n");
   const toolset = "---\ntype: mcp_toolset\nmcp_server_name: x\n---\n";
 
   assert.equal(errs(toolset), "");
@@ -191,6 +191,6 @@ test("MCP servers and their toolset files are checked against each other", () =>
   assert.match(errs(toolset, agent.replace("type: url", "type: stdio")), /`x` must have `type: url`/);
   assert.match(errs(toolset, agent.replace(server, server + server.slice("mcp_servers:\n".length))), /`x` is declared twice/);
 
-  const twice = check(instance({ "agent.md": agent, "env.md": ENV_MD, "tools/a/x.md": toolset, "tools/x.md": toolset }));
+  const twice = check(instance({ "agent.md": agent, "computer.md": ENV_MD, "tools/a/x.md": toolset, "tools/x.md": toolset }));
   assert.match(twice.errors.join("\n"), /more than one MCP server is named `x`/);
 });

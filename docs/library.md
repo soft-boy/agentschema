@@ -55,8 +55,8 @@ await conversation.send("Hello");
 
 | Export | What it does |
 |---|---|
-| `checkFiles(files, options)` | Validates a file map. Returns `{ errors, warnings, instance }`, where `instance` is null if `agent.md` or `env.md` can't be read. See [Checking](check.md) |
-| `readInstance(files)` | Reads `agent.md` and `env.md`. Returns `{ agent, env, errors }` |
+| `checkFiles(files, options)` | Validates a file map. Returns `{ errors, warnings, instance }`, where `instance` is null if `agent.md` or `computer.md` can't be read. See [Checking](check.md) |
+| `readInstance(files)` | Reads `agent.md` and `computer.md`, or `env.md`, its old name. Returns `{ agent, env, errors, warnings }`, and `env.file` says which name it was read from |
 | `readTools(files)` | Returns `{ tools, errors }` |
 | `readSkills(files)` | Returns `{ skills, errors }` |
 | `readVaults(files)` | Returns `{ vaults, errors }` |
@@ -128,7 +128,7 @@ See [Scheduled tasks](scheduled.md).
 ### Files and constants
 
 - **Files:** `textOf`, `bytesOf`, `isIgnoredPath`, `pathsUnder`
-- **Names:** `AGENT_FILE`, `ENV_FILE`, `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`
+- **Names:** `AGENT_FILE`, `COMPUTER_FILE`, `OLD_COMPUTER_FILE` (`env.md`), `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`
 - **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `PREBUILT_TOOLS`, `POLICIES`
 - **Credential types:** `MCP_OAUTH`, `ENV_VAR`, `CREDENTIAL_TYPES`, `SECRET_FIELDS`, `TOKEN_ENDPOINT_AUTH`
 - **Other:** `MODELS`, `NETWORKING`, `MAX_UPLOAD_BYTES`, `FileError`
@@ -152,7 +152,7 @@ See [Scheduled tasks](scheduled.md).
 | `pathOf` | How to show a file's path in messages |
 | `scheduled` | `false` leaves scheduled tasks alone, for a copy of the agent that's only for trying it out |
 
-`deploy(dir, options)` does the same for a folder on disk. `prepareLock(previous, client)` returns the lock to use, after checking it's for this API. Failures are `DeployError`.
+`deploy(dir, options)` does the same for a folder on disk. `prepareLock(previous, client)` returns the lock to use, after checking it's for this API and moving an environment under `./env.md` to `./computer.md`. `environmentEntry(lock)` finds the environment's entry under either key, and `upgradeLock(lock)` does the move on its own. Failures are `DeployError`.
 
 | Export | What it does |
 |---|---|

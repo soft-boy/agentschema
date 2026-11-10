@@ -115,7 +115,7 @@ const noSecrets = async () => assert.fail("nothing should be asked");
 test("cred login registers a client, signs in with PKCE, and writes the refresh block", async () => {
   const oauth = await fakeOAuth();
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Linear.md": credFile(oauth.url) });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Linear.md": credFile(oauth.url) });
     const client = fakeClient();
     const file = join(dir, "vaults/Ops/Linear.md");
     await credLogin(file, { client, ask: noSecrets, openBrowser: browser });
@@ -154,7 +154,7 @@ test("cred login registers a client, signs in with PKCE, and writes the refresh 
 test("cred login finds a sign-in that only the server's 401 points to", async () => {
   const oauth = await fakeOAuth({ metadataAt: "/mcp/.well-known/oauth-protected-resource" });
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Brokers.md": credFile(oauth.url) });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Brokers.md": credFile(oauth.url) });
     await credLogin(join(dir, "vaults/Ops/Brokers.md"), { client: fakeClient(), ask: noSecrets, openBrowser: browser });
     assert.equal(oauth.seen.authorize.client_id, "dyn_client");
     assert.equal(oauth.seen.authorize.resource, oauth.url);
@@ -183,7 +183,7 @@ test("cred login uses the file's own client, asking for its secret", async () =>
   const oauth = await fakeOAuth({ registration: false });
   try {
     const refresh = `  refresh:\n    token_endpoint: ${oauth.origin}/auth/token\n    client_id: my_client\n    scope: read write\n    token_endpoint_auth:\n      type: client_secret_basic\n`;
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Cal.md": credFile(oauth.url, refresh) });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Cal.md": credFile(oauth.url, refresh) });
     const client = fakeClient();
     await credLogin(join(dir, "vaults/Ops/Cal.md"), { client, ask: async () => "s3cret", openBrowser: browser });
 
@@ -200,7 +200,7 @@ test("cred login uses the file's own client, asking for its secret", async () =>
 test("cred login explains what to add when the server won't register clients", async () => {
   const oauth = await fakeOAuth({ registration: false });
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Cal.md": credFile(oauth.url) });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Cal.md": credFile(oauth.url) });
     await assert.rejects(
       credLogin(join(dir, "vaults/Ops/Cal.md"), { client: fakeClient(), ask: noSecrets, openBrowser: () => assert.fail("no browser") }),
       /doesn't let apps register themselves[\s\S]*token_endpoint: http:\/\/127\.0\.0\.1:\d+\/auth\/token[\s\S]*supported: read write/,
@@ -213,7 +213,7 @@ test("cred login explains what to add when the server won't register clients", a
 test("cred login creates nothing when no refresh token comes back", async () => {
   const oauth = await fakeOAuth({ refreshToken: null });
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Linear.md": credFile(oauth.url) });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Linear.md": credFile(oauth.url) });
     const client = fakeClient();
     await assert.rejects(credLogin(join(dir, "vaults/Ops/Linear.md"), { client, ask: noSecrets, openBrowser: browser }), /didn't return a refresh token/);
     assert.deepEqual(client.calls, []);
@@ -232,7 +232,7 @@ const menu = (lines) => {
 test("cred create asks for the vault, server and name, writes the file, then signs in", async () => {
   const oauth = await fakeOAuth();
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD });
     const client = fakeClient();
     // new vault's name, what it's for, server URL, credential name, how to get tokens
     await credCreate(dir, { client, io: menu(["Ops", "1", oauth.url, "Linear", "1"]), openBrowser: browser });
@@ -253,7 +253,7 @@ test("cred create offers the agent's MCP servers, and asks for your own client w
     const agent = AGENT_MD.replace("model: claude-opus-5-5\n", `model: claude-opus-5-5\nmcp_servers:\n  - type: url\n    name: calendar\n    url: ${oauth.url}\n`);
     const dir = instance({
       "agent.md": agent,
-      "env.md": ENV_MD,
+      "computer.md": ENV_MD,
       "tools/calendar.md": "---\ntype: mcp_toolset\nmcp_server_name: calendar\n---\n",
       "vaults/Shared/vault.md": "---\n---\n",
     });
@@ -277,7 +277,7 @@ test("cred create offers the agent's MCP servers, and asks for your own client w
 test("cred create falls back to pasting tokens for a server with no OAuth sign-in", async () => {
   const oauth = await fakeOAuth({ path: "/elsewhere" });
   try {
-    const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD });
+    const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD });
     const client = fakeClient();
     // vault, what it's for, URL, name, tokens: paste, refreshable?, access token, expiry
     await credCreate(dir, { client, io: menu(["Ops", "1", `${oauth.origin}/mcp`, "Internal", "1", "n", "tok_1", ""]), openBrowser: () => assert.fail("no browser") });
@@ -289,7 +289,7 @@ test("cred create falls back to pasting tokens for a server with no OAuth sign-i
 });
 
 test("cred deploy creates the credential an existing file describes", async () => {
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "vaults/Ops/Internal.md": credFile("https://example.com/mcp") });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "vaults/Ops/Internal.md": credFile("https://example.com/mcp") });
   const client = fakeClient();
   // tokens: paste, access token, expiry
   await credDeploy(join(dir, "vaults/Ops/Internal.md"), { client, io: menu(["2", "tok_1", ""]), openBrowser: () => assert.fail("no browser") });
@@ -299,7 +299,7 @@ test("cred deploy creates the credential an existing file describes", async () =
 
 test("cred create adds an environment variable, and cred deploy only asks for its value", async () => {
   const env = ENV_MD.replace("type: limited\n", "type: limited\n    allowed_hosts:\n      - api.stripe.com\n");
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": env });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": env });
   const client = fakeClient();
   const lines = [];
   const noNetwork = async () => assert.fail("no network");
@@ -318,7 +318,7 @@ test("cred create adds an environment variable, and cred deploy only asks for it
 });
 
 test("cred create warns when the environment blocks the variable's host, and can set it right away", async () => {
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD });
   const client = fakeClient();
   const lines = [];
   // new vault, what it's for, variable, hosts, headers and body, name, paste the value, the value
@@ -382,7 +382,7 @@ test("cred login lists the server's tools in their file, with the permission tha
     const agent = AGENT_MD.replace("---\n\n", `mcp_servers:\n  - type: url\n    name: linear\n    url: ${oauth.url}\n---\n\n`);
     const dir = instance({
       "agent.md": agent,
-      "env.md": ENV_MD,
+      "computer.md": ENV_MD,
       "tools/linear.md": mcpToolsetFile({ name: "linear", permission: "auto" }),
       "vaults/Ops/Linear.md": credFile(oauth.url),
     });

@@ -10,7 +10,7 @@ Define an AI-Agent as a folder of Markdown files.
 ```
 my-agent/
 ├── agent.md                          # the agent
-├── env.md                            # the environment it runs in
+├── computer.md                       # the computer it runs on
 ├── system_prompt/
 │   └── rules.md                      # more of the system prompt
 ├── tools/
@@ -37,7 +37,7 @@ my-agent/
 - [Specification](#specification)
   - [`agent.md`](#agentmd)
   - [`system_prompt/`](#system_prompt)
-  - [`env.md`](#envmd)
+  - [`computer.md`](#computermd)
   - [`tools/`](#tools)
   - [`skills/`](#skills)
   - [`vaults/`](#vaults)
@@ -82,7 +82,7 @@ agentschema run my-agent
 
 ## Specification
 
-`agent.md` and `env.md` are required; everything else is optional. `agentschema check` validates a folder without calling the API. This is the short version, and the full specification is in [docs/](docs/README.md).
+`agent.md` and `computer.md` are required; everything else is optional. `agentschema check` validates a folder without calling the API. This is the short version, and the full specification is in [docs/](docs/README.md).
 
 ### `agent.md`
 
@@ -92,9 +92,9 @@ The frontmatter uses the fields of a [Managed Agents agent](https://platform.cla
 
 A long system prompt can be split into files here, at any depth. They're added after `agent.md`'s body, in the order `tree` lists them, with a blank line between each one, so number them to keep them in order, like `01-role.md` and `02-rules.md`. Each file is taken as written. See [System prompt](docs/system_prompt.md).
 
-### `env.md`
+### `computer.md`
 
-The frontmatter uses the fields of a [Managed Agents environment](https://platform.claude.com/docs/en/managed-agents/environments). The body is a note for people, and isn't sent anywhere.
+The computer the agent runs on. The frontmatter uses the fields of a [Managed Agents environment](https://platform.claude.com/docs/en/managed-agents/environments), and the body is a note for people, and isn't sent anywhere. It used to be called `env.md`, which still works, with a warning to rename it.
 
 ### `tools/`
 

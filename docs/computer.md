@@ -1,8 +1,8 @@
-# `env.md`
+# `computer.md`
 
-Defines the environment the agent's tools run in. The frontmatter uses the fields of a [Managed Agents environment](https://platform.claude.com/docs/en/managed-agents/environments). The body is a note for people, and isn't sent anywhere.
+Defines the computer the agent's tools run on: its container, and what that can reach on the network. The frontmatter uses the fields of a [Managed Agents environment](https://platform.claude.com/docs/en/managed-agents/environments). The body is a note for people, and isn't sent anywhere.
 
-```markdown path=env.md
+```markdown path=computer.md
 ---
 name: front-desk
 description: Where the front desk agent runs.
@@ -55,3 +55,10 @@ With the defaults, `init` writes a cloud environment named after the folder, wit
 ## Updates
 
 Removing `description` or a `metadata` key from the file removes it from the environment when you deploy. See [Deploying and the lock](deploy.md#how-updates-work).
+
+## Renamed from `env.md`
+
+This file used to be called `env.md`:
+
+- A folder that still has `env.md` works the same, and `check` warns to rename it. Having both `env.md` and `computer.md` is an error.
+- A lock written before the rename keeps the environment under `./env.md`. The next deploy moves it to `./computer.md`, and updates that same environment rather than making another, so sessions and scheduled tasks keep using it.

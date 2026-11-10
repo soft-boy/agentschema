@@ -9,7 +9,7 @@ import { deployFiles } from "../src/deploy.js";
 import { readFolder } from "../src/folder.js";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
-const BASE = { "agent.md": AGENT_MD, "env.md": ENV_MD };
+const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };
 const checked = (files) => checkFiles({ ...BASE, ...files });
 const promptOf = (files) => agentBody(checked(files).instance).system;
 

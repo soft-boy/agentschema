@@ -43,7 +43,7 @@ The agent's body includes its skill references, so a new skill version updates t
   "origin": { "base_url": "https://api.anthropic.com" },
   "resources": {
     "./skills/code-review": { "kind": "skill", "id": "skill_…", "version": "…", "hash": "…" },
-    "./env.md": { "kind": "environment", "id": "env_…", "hash": "…" },
+    "./computer.md": { "kind": "environment", "id": "env_…", "hash": "…" },
     "./agent.md": { "kind": "agent", "id": "agent_…", "version": "3", "hash": "…" },
     "./vaults/secrets": { "kind": "vault", "id": "…", "hash": "…" },
     "./vaults/secrets/linear.md": { "kind": "credential", "id": "…", "vault_id": "…", "hash": "…" },
@@ -52,7 +52,7 @@ The agent's body includes its skill references, so a new skill version updates t
 }
 ```
 
-Keys are `./` and the file's or folder's path. The lock is saved as soon as each resource exists, so a failure later doesn't orphan it, and the next deploy carries on from there.
+Keys are `./` and the file's or folder's path. The environment is always under `./computer.md`, even from a folder that still uses its old name, `env.md`, and a lock that has it under `./env.md` is moved over on the next deploy. The lock is saved as soon as each resource exists, so a failure later doesn't orphan it, and the next deploy carries on from there.
 
 An entry of the wrong `kind` for its path is an error.
 
@@ -65,7 +65,7 @@ The API's updates keep any field they aren't sent, but removing something from a
 | The body of `agent.md` | `system: null` |
 | `description`, `multiagent` in `agent.md` | `null` |
 | `tools`, `mcp_servers`, `skills` | `[]` |
-| `description` in `env.md` | `null` |
+| `description` in `computer.md` | `null` |
 | A `metadata` key, anywhere | That key as `null` |
 
 ## Changes made elsewhere

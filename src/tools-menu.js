@@ -4,7 +4,7 @@ import { stringify } from "yaml";
 import { check } from "./check.js";
 import { serviceName } from "./cred-menu.js";
 import { DeployError } from "./deploy.js";
-import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
+import { AGENT_FILE, COMPUTER_FILE, OLD_COMPUTER_FILE } from "../lib/instance.js";
 import { builtInFile } from "../lib/scaffold.js";
 import { updateFrontmatter } from "./folder.js";
 import { listMcpTools } from "./mcp.js";
@@ -38,7 +38,7 @@ export async function toolsCreate(dir = ".", { io, fetch = globalThis.fetch, log
   }
 
   const after = check(dir);
-  const related = (m) => m.startsWith(path) || (kind === MCP && (m.startsWith(AGENT_FILE) || m.startsWith(ENV_FILE)));
+  const related = (m) => m.startsWith(path) || (kind === MCP && [AGENT_FILE, COMPUTER_FILE, OLD_COMPUTER_FILE].some((file) => m.startsWith(file)));
   for (const w of after.warnings.filter(related)) log(`warning: ${w}`);
   for (const e of after.errors.filter(related)) log(`error: ${e}`);
   if (kind === CUSTOM) log(`\nWrite the tool's code in its ## Code block, then deploy with:\n  agentschema deploy ${dir}`);

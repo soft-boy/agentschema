@@ -17,7 +17,7 @@ model: claude-opus-5-5
 You answer questions about our product, and say so when you aren't sure.
 ```
 
-```markdown path=env.md
+```markdown path=computer.md
 ---
 name: support
 config:
@@ -34,7 +34,7 @@ A note for people. This isn't sent anywhere.
 ```
 my-agent/
 ├── agent.md                          # the agent, required
-├── env.md                            # the environment it runs in, required
+├── computer.md                       # the computer it runs on, required
 ├── system_prompt/                    # more of the system prompt, in tree order
 │   └── rules.md
 ├── tools/                            # what it can do
@@ -68,7 +68,7 @@ my-agent/
 | Files | Becomes | Sent by |
 |---|---|---|
 | `agent.md` body and frontmatter, plus `system_prompt/` and `tools/` | An agent | `deploy` |
-| `env.md` frontmatter | An environment | `deploy` |
+| `computer.md` frontmatter | An environment | `deploy` |
 | `skills/<name>/` | A skill, with a new version on each change | `deploy` |
 | `vaults/<name>/` | A vault | `deploy` |
 | `vaults/<name>/<credential>.md` | A credential | `cred deploy`, `cred login` or `cred create` |
@@ -77,7 +77,7 @@ my-agent/
 
 ## Words used in these docs
 
-- **Agent folder:** a folder holding `agent.md` and `env.md`.
+- **Agent folder:** a folder holding `agent.md` and `computer.md`.
 - **File map:** an agent as `{ path: contents }`, however it's stored. See [Files and folders](folder.md).
 - **Instance:** the parsed files that `check` returns.
 - **Lock:** `claude-lock.json`, which maps files to the runtime's IDs. See [Deploying and the lock](deploy.md).
@@ -91,7 +91,7 @@ my-agent/
 - [Files and folders](folder.md): layout, naming, Markdown rules and file maps
 - [`agent.md`](agent.md): the agent
 - [`system_prompt/`](system_prompt.md): a long system prompt, split into files
-- [`env.md`](env.md): its environment
+- [`computer.md`](computer.md): the computer it runs on
 - [`tools/`](tools.md): pre-built tools, MCP servers, custom tools and agentbook toolsets
 - [`skills/`](skills.md): instructions loaded when needed
 - [`vaults/`](vaults.md): credentials

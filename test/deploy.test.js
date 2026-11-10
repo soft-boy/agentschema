@@ -47,7 +47,7 @@ test("first deploy creates both resources and writes the lock", async () => {
   assert.equal(client.calls[1][1].system, "You are a helpful coding assistant.");
   const lock = readLock(dir);
   assert.equal(lock.origin.base_url, "https://api.anthropic.com");
-  assert.equal(lock.resources["./env.md"].id, "env_1");
+  assert.equal(lock.resources["./computer.md"].id, "env_1");
   assert.deepEqual(
     { ...lock.resources["./agent.md"], hash: undefined },
     { kind: "agent", id: "agent_2", version: "1", hash: undefined },
@@ -84,7 +84,7 @@ test("a changed agent.md updates the agent in place with the locked version", as
 test("fields removed from the file are cleared on update", async () => {
   const dir = instance({
     "agent.md": "---\nname: a\nmodel: m\ndescription: d\nmetadata: {team: x}\n---\nPrompt\n",
-    "env.md": ENV_MD,
+    "computer.md": ENV_MD,
   });
   const client = fakeClient();
   await deploy(dir, { client });
@@ -136,12 +136,12 @@ test("a locked resource that no longer exists gives a clear error", async () => 
   const client = fakeClient();
   await deploy(dir, { client });
   client.store.delete("env_1");
-  writeFileSync(join(dir, "env.md"), ENV_MD.replace("quickstart", "renamed"));
+  writeFileSync(join(dir, "computer.md"), ENV_MD.replace("quickstart", "renamed"));
   await assert.rejects(deploy(dir, { client }), /env_1 in claude-lock\.json no longer exists/);
 });
 
 test("channels aren't connected by a deploy, which says so", async () => {
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "channels/telegram.md": '---\ntype: telegram\nallow: "*"\n---\n\nKeep it short.\n' });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "channels/telegram.md": '---\ntype: telegram\nallow: "*"\n---\n\nKeep it short.\n' });
   const client = fakeClient();
   const lines = [];
   await deploy(dir, { client, log: (line) => lines.push(line) });
@@ -149,11 +149,11 @@ test("channels aren't connected by a deploy, which says so", async () => {
   assert.deepEqual(client.calls.map((c) => c[0]), ["env.create", "agent.create"]);
   assert.equal(client.calls[1][1].system, "You are a helpful coding assistant.");
   assert.ok(lines.some((line) => line.startsWith("channels/ isn't connected")));
-  assert.deepEqual(Object.keys(readLock(dir).resources).sort(), ["./agent.md", "./env.md"]);
+  assert.deepEqual(Object.keys(readLock(dir).resources).sort(), ["./agent.md", "./computer.md"]);
 });
 
 test("channels in a folder are checked before anything is sent", async () => {
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "channels/telegram.md": "---\ntype: telegram\n---\n" });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "channels/telegram.md": "---\ntype: telegram\n---\n" });
   const client = fakeClient();
   await assert.rejects(deploy(dir, { client }), /`allow` is required/);
   assert.deepEqual(client.calls, []);

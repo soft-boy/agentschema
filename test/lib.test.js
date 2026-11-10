@@ -9,7 +9,7 @@ import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
 const { agentBody, agentbookTools, checkFiles, editFrontmatter, scaffold, defaultAnswers, skillRefs, textStream } = lib;
 const { DeployError, check, deploy, deployFiles, hashBody, readFolder, skillFingerprint, startSession } = nodeApi;
 
-const BASE = { "agent.md": AGENT_MD, "env.md": ENV_MD };
+const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };
 const CATALOG = {
   google_calendar: {
     tools: [
@@ -100,8 +100,8 @@ test("contents can be strings or bytes, and hash the same either way", () => {
 
 test("a file map reports the same layout problems as a folder", () => {
   const errors = (files) => checkFiles(files).errors.join("\n");
-  assert.match(errors({}), /agent\.md: missing[\s\S]*env\.md: missing/);
-  assert.match(errors({ "AGENT.md": AGENT_MD, "env.md": ENV_MD }), /found AGENT\.md; the name must be lowercase/);
+  assert.match(errors({}), /agent\.md: missing[\s\S]*computer\.md: missing/);
+  assert.match(errors({ "AGENT.md": AGENT_MD, "computer.md": ENV_MD }), /found AGENT\.md; the name must be lowercase/);
   assert.match(errors({ ...BASE, tools: "a file" }), /tools: not a directory/);
   assert.match(errors({ ...BASE, skills: "a file" }), /skills: not a directory/);
   assert.match(errors({ ...BASE, vaults: "a file" }), /vaults: not a directory/);
@@ -214,15 +214,61 @@ test("startSession pins a version and passes a budget, from data alone", async (
   const budget = { type: "limit", max_list_cost: { amount: "1.00", currency: "USD" } };
   const { session } = await startSession({ instance: inst, lock, client, agentVersion: 7, budget, title: "Live chat" });
   assert.deepEqual(session.agent, { type: "agent", id: lock.resources["./agent.md"].id, version: 7 });
-  assert.equal(session.environment_id, lock.resources["./env.md"].id);
+  assert.equal(session.environment_id, lock.resources["./computer.md"].id);
   assert.equal(session.title, "Live chat");
   assert.deepEqual(session.budget, budget);
   await assert.rejects(startSession({ instance: inst, lock: null, client }), /hasn't been deployed/);
 });
 
+test("env.md, computer.md's old name, still works, with a warning to rename it", () => {
+  const old = { "agent.md": AGENT_MD, "env.md": ENV_MD };
+  const { errors, warnings, instance: inst } = checkFiles(old);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, ["env.md: this is computer.md's old name; rename it to computer.md"]);
+  assert.equal(inst.env.file, "env.md");
+  assert.equal(inst.env.data.name, "quickstart");
+  // Its problems are reported under the name it has.
+  assert.match(checkFiles({ ...old, "env.md": "---\ndescription: x\n---\n" }).errors.join("\n"), /^env\.md: `name` is required$/m);
+  assert.ok("env.md" in readFolder(instance(old)));
+
+  // Both is an error, and computer.md is the one used.
+  const both = checkFiles({ ...old, "computer.md": ENV_MD.replace("quickstart", "new") });
+  assert.deepEqual(both.errors, ["env.md: this is computer.md's old name, and the folder has both; remove env.md"]);
+  assert.equal(both.instance.env.file, "computer.md");
+  assert.equal(both.instance.env.data.name, "new");
+});
+
+test("a lock from before the rename keeps its environment, moved to ./computer.md on the next deploy", async () => {
+  const client = fakeClient();
+  const { lock } = await deployFiles({ files: BASE, client });
+  const { "./computer.md": environment, ...rest } = lock.resources;
+  const oldLock = () => ({ ...structuredClone(lock), resources: { "./env.md": structuredClone(environment), ...structuredClone(rest) } });
+
+  // A session starts from it as it is.
+  const { session } = await startSession({ instance: checkFiles(BASE).instance, lock: oldLock(), client });
+  assert.equal(session.environment_id, environment.id);
+
+  // Deploying, from either name, updates that environment rather than making another.
+  for (const files of [BASE, { "agent.md": AGENT_MD, "env.md": ENV_MD }]) {
+    client.calls.length = 0;
+    const unchanged = await deployFiles({ files, lock: oldLock(), client });
+    assert.deepEqual(client.calls, []);
+    assert.deepEqual(unchanged.plan.map((p) => [p.kind, p.action, p.id]), [["environment", "unchanged", environment.id], ["agent", "unchanged", lock.resources["./agent.md"].id]]);
+    assert.deepEqual(unchanged.lock.resources["./computer.md"], environment);
+    assert.equal("./env.md" in unchanged.lock.resources, false);
+
+    const renamed = { ...files };
+    for (const name of ["computer.md", "env.md"]) if (renamed[name]) renamed[name] = ENV_MD.replace("quickstart", "renamed");
+    const updated = await deployFiles({ files: renamed, lock: oldLock(), client });
+    assert.deepEqual(client.calls.map((c) => [c[0], c[1]]), [["env.update", environment.id]]);
+    assert.equal(updated.lock.resources["./computer.md"].id, environment.id);
+    assert.equal("./env.md" in updated.lock.resources, false);
+  }
+});
+
 test("scaffold and editFrontmatter work on text alone", () => {
   const files = scaffold(defaultAnswers("Bug Triage"));
-  assert.deepEqual(Object.keys(files), ["agent.md", "env.md", "tools/agent_toolset_20260401.md"]);
+  assert.deepEqual(Object.keys(files), ["agent.md", "computer.md", "tools/agent_toolset_20260401.md"]);
   assert.deepEqual(checkFiles(files).errors, []);
   assert.equal(checkFiles(files).instance.agent.data.name, "Bug Triage");
 

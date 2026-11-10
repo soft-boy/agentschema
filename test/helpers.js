@@ -30,7 +30,7 @@ export const toolset = (...rows) =>
 export const PREBUILT_MD = toolset("bash");
 
 // Writes { path: contents } into a fresh temporary folder and returns its path.
-export function instance(files = { "agent.md": AGENT_MD, "env.md": ENV_MD, "tools/agent_toolset_20260401.md": PREBUILT_MD }) {
+export function instance(files = { "agent.md": AGENT_MD, "computer.md": ENV_MD, "tools/agent_toolset_20260401.md": PREBUILT_MD }) {
   const dir = mkdtempSync(join(tmpdir(), "agentschema-"));
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, name)), { recursive: true });

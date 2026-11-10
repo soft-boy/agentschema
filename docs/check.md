@@ -39,13 +39,14 @@ Files that map to an API object are lenient, so a new API field works before age
 - A channel's instructions and the system prompt together fit the limit.
 - Two channels don't claim the same address.
 - A channel anyone can message doesn't have tools that act for you without asking.
+- The system prompt, `agent.md`'s body and `system_prompt/` together, fits the limit, and every file in `system_prompt/` is text.
 - A scheduled task's agent doesn't have tools that wait for an answer, since nobody's there to give one during a run. See [Scheduled tasks](scheduled.md#nobodys-there-to-answer).
 
 ## Limits
 
 | What | Limit |
 |---|---|
-| System prompt | 100,000 characters |
+| System prompt, with `system_prompt/` | 100,000 characters |
 | Agent `name` | 256 characters |
 | Agent `description` | 2,048 characters |
 | Agent `metadata` | 16 keys |

@@ -176,7 +176,7 @@ test("openSession pins the deployed agent version and warns about undeployed edi
     environment_id: "env_1",
     title: "Coding Assistant (agentschema run)",
   });
-  assert.match(notes[0], /agent\.md or tools\/ has changed since the last deploy/);
+  assert.match(notes[0], /agent\.md, system_prompt\/ or tools\/ has changed since the last deploy/);
 });
 
 test("openSession needs a deploy first", async () => {

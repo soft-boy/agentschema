@@ -1,11 +1,18 @@
 # agentschema
 
+[![npm](https://img.shields.io/npm/v/@soft-boy/agentschema)](https://www.npmjs.com/package/@soft-boy/agentschema)
+[![downloads](https://img.shields.io/npm/dm/@soft-boy/agentschema)](https://www.npmjs.com/package/@soft-boy/agentschema)
+[![node](https://img.shields.io/node/v/@soft-boy/agentschema)](https://nodejs.org)
+[![license](https://img.shields.io/npm/l/@soft-boy/agentschema)](LICENSE)
+
 Define an AI-Agent as a folder of Markdown files.
 
 ```
 my-agent/
 ├── agent.md                          # the agent
 ├── env.md                            # the environment it runs in
+├── system_prompt/
+│   └── rules.md                      # more of the system prompt
 ├── tools/
 │   ├── agent_toolset_20260401.md     # the pre-built tools to enable
 │   └── get_weather.md                # a custom tool
@@ -22,6 +29,26 @@ my-agent/
 ```
 
 **Status:** v0.2 draft. v0.2 breaks from the Claude Managed Agents schema: tools move out of `agent.md` and into `tools/`.
+
+## Table of contents
+
+- [Philosophy](#philosophy)
+- [Install](#install)
+- [Authentication](#authentication)
+- [Getting started](#getting-started)
+- [Specification](#specification)
+  - [`agent.md`](#agentmd)
+  - [`system_prompt/`](#system_prompt)
+  - [`env.md`](#envmd)
+  - [`tools/`](#tools)
+  - [`skills/`](#skills)
+  - [`vaults/`](#vaults)
+  - [`channels/`](#channels)
+  - [`scheduled/`](#scheduled)
+- [Usage](#usage)
+- [Library](#library)
+- [Development](#development)
+- [License](#license)
 
 ## Philosophy
 
@@ -62,6 +89,10 @@ agentschema run my-agent
 ### `agent.md`
 
 The frontmatter uses the fields of a [Managed Agents agent](https://platform.claude.com/docs/en/managed-agents/agent-setup), and `name` and `model` are required. The body is the system prompt.
+
+### `system_prompt/`
+
+A long system prompt can be split into files here, at any depth. They're added after `agent.md`'s body, in the order `tree` lists them, with a blank line between each one, so number them to keep them in order, like `01-role.md` and `02-rules.md`. Each file is taken as written. See [System prompt](docs/system_prompt.md).
 
 ### `env.md`
 
@@ -208,3 +239,7 @@ npm install
 npm test    # unit tests; deploy runs against a fake API client
 npm link    # makes `agentschema` available globally from this checkout
 ```
+
+## License
+
+[MIT](LICENSE)

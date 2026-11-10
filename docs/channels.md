@@ -25,7 +25,7 @@ For each message, a host receives it from the provider, starts or continues a se
 
 The body holds instructions for conversations on this channel. They're added after `agent.md`'s system prompt, for those sessions only, so one agent can write short texts over SMS and fuller replies by email. The two together can be up to the API's limit of 100,000 characters.
 
-A session can override `system` for itself, so a channel doesn't need its own copy of the agent. `channelSystem(agent, channel)` builds the prompt, so that every host joins them the same way, and `startSession` takes it as `system`.
+A session can override `system` for itself, so a channel doesn't need its own copy of the agent. `channelSystem(instance, channel)` builds the prompt, including [`system_prompt/`](system_prompt.md), so that every host joins them the same way, and `startSession` takes it as `system`.
 
 ## Fields every channel has
 

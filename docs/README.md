@@ -35,6 +35,8 @@ A note for people. This isn't sent anywhere.
 my-agent/
 ├── agent.md                          # the agent, required
 ├── env.md                            # the environment it runs in, required
+├── system_prompt/                    # more of the system prompt, in tree order
+│   └── rules.md
 ├── tools/                            # what it can do
 │   ├── agent_toolset_20260401.md     # the pre-built tools to enable
 │   ├── linear.md                     # an MCP server's tools
@@ -65,7 +67,7 @@ my-agent/
 
 | Files | Becomes | Sent by |
 |---|---|---|
-| `agent.md` body and frontmatter, plus `tools/` | An agent | `deploy` |
+| `agent.md` body and frontmatter, plus `system_prompt/` and `tools/` | An agent | `deploy` |
 | `env.md` frontmatter | An environment | `deploy` |
 | `skills/<name>/` | A skill, with a new version on each change | `deploy` |
 | `vaults/<name>/` | A vault | `deploy` |
@@ -88,6 +90,7 @@ my-agent/
 
 - [Files and folders](folder.md): layout, naming, Markdown rules and file maps
 - [`agent.md`](agent.md): the agent
+- [`system_prompt/`](system_prompt.md): a long system prompt, split into files
 - [`env.md`](env.md): its environment
 - [`tools/`](tools.md): pre-built tools, MCP servers, custom tools and agentbook toolsets
 - [`skills/`](skills.md): instructions loaded when needed

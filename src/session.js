@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { SYSTEM_PROMPT_DIR } from "../lib/system-prompt.js";
 import { skillKey, skillRefs } from "../lib/skills.js";
 import { TOOLS_DIR } from "../lib/tools.js";
 import { credentialKey, vaultKey } from "../lib/vaults.js";
@@ -28,7 +29,7 @@ export async function openSession(dir, { client, sessionId }) {
   const { instance, errors } = check(dir);
   if (instance && errors.length === 0) {
     if (hashBody(agentBody(instance, skillRefs(instance.skills, lock))) !== agent.hash) {
-      notes.push(`${AGENT_FILE} or ${TOOLS_DIR}/ has changed since the last deploy`);
+      notes.push(`${AGENT_FILE}, ${SYSTEM_PROMPT_DIR}/ or ${TOOLS_DIR}/ has changed since the last deploy`);
     }
     for (const skill of instance.skills) {
       if (hashBody(skillFingerprint(skill)) !== lock.resources[skillKey(skill)]?.hash) notes.push(`${skill.path} has changed since the last deploy`);

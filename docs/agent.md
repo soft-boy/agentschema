@@ -1,6 +1,6 @@
 # `agent.md`
 
-Defines the agent. The frontmatter uses the fields of a [Managed Agents agent](https://platform.claude.com/docs/en/managed-agents/agent-setup), and the body is the system prompt.
+Defines the agent. The frontmatter uses the fields of a [Managed Agents agent](https://platform.claude.com/docs/en/managed-agents/agent-setup), and the body is the system prompt, followed by anything in [`system_prompt/`](system_prompt.md).
 
 ```markdown path=agent.md
 ---
@@ -52,7 +52,7 @@ Any other field is a warning, and it's sent to the API as written, so that a new
 
 ## The body
 
-The body is sent as `system`, up to the API's limit of 100,000 characters. An empty body sends no system prompt. A [channel](channels.md) can add to it for conversations on that channel.
+The body is sent as `system`, followed by the files in [`system_prompt/`](system_prompt.md), up to the API's limit of 100,000 characters for all of it. An empty body with no `system_prompt/` sends no system prompt. A [channel](channels.md) can add to it for conversations on that channel.
 
 ## `mcp_servers`
 
@@ -89,7 +89,7 @@ A plain string is an error. The list and `skills/` together can hold up to 500 s
 
 `deploy` sends the frontmatter as written, with these added:
 
-- `system`, from the body
+- `system`, from the body and `system_prompt/`
 - `tools`, compiled from [`tools/`](tools.md)
 - `skills`, this list followed by the skills deployed from `skills/`, pinned to their versions
 

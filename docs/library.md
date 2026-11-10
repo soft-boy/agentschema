@@ -61,6 +61,8 @@ await conversation.send("Hello");
 | `readSkills(files)` | Returns `{ skills, errors }` |
 | `readVaults(files)` | Returns `{ vaults, errors }` |
 | `readChannels(files)` | Returns `{ channels, errors }` |
+| `readSystemPrompt(files)` | Returns `{ parts, errors }`, where each part is `{ file, text }` from `system_prompt/`, in order |
+| `systemPromptOf(instance)` | The whole system prompt: `agent.md`'s body, then `system_prompt/`. See [System prompt](system_prompt.md) |
 | `parseMarkdown(text, file)` | Returns `{ data, body, raw }`, or throws `FileError` |
 | `editFrontmatter(text, edit)` | Edits frontmatter through `edit(doc)`, a `yaml` Document, keeping its comments and the rest of the file. Returns the new text |
 
@@ -70,7 +72,7 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 
 | Export | What it does |
 |---|---|
-| `agentBody(instance, skillRefs, options)` | The body sent to create an agent |
+| `agentBody(instance, skillRefs, options)` | The body sent to create an agent. Its `system` is `systemPromptOf(instance)` |
 | `envBody(instance)` | The body sent to create an environment |
 | `compileTools(tools, { toolsets })` | The agent's `tools` list |
 | `skillRefs(skills, lock)` | The references to deployed skills, pinned to their versions |
@@ -96,7 +98,7 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 | Export | What it does |
 |---|---|
 | `channelSettings(channel)` | How a channel behaves, with every default filled in: `{ type, enabled, allow, respondTo, dedicatedChannels, sendTo, scope, expiresAfterMs, approvals, limits, greeting }` |
-| `channelSystem(agent, channel)` | The system prompt for a conversation on this channel |
+| `channelSystem(instance, channel)` | The system prompt for a conversation on this channel. Given only the agent, it leaves out `system_prompt/` |
 | `durationMs(value)` | `"24h"` in milliseconds, or null if it isn't a length of time |
 | `CHANNEL_TYPES` | What each type needs, including `CHANNEL_TYPES[type].secrets` |
 | `ANYONE` | `"*"`, the value of `allow` for anyone |
@@ -126,7 +128,7 @@ See [Scheduled tasks](scheduled.md).
 ### Files and constants
 
 - **Files:** `textOf`, `bytesOf`, `isIgnoredPath`, `pathsUnder`
-- **Names:** `AGENT_FILE`, `ENV_FILE`, `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `TOOLSET_FILE`
+- **Names:** `AGENT_FILE`, `ENV_FILE`, `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`
 - **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `PREBUILT_TOOLS`, `POLICIES`
 - **Credential types:** `MCP_OAUTH`, `ENV_VAR`, `CREDENTIAL_TYPES`, `SECRET_FIELDS`, `TOKEN_ENDPOINT_AUTH`
 - **Other:** `MODELS`, `NETWORKING`, `MAX_UPLOAD_BYTES`, `FileError`
@@ -167,7 +169,7 @@ See [Scheduled tasks](scheduled.md).
 | `lock` | The lock |
 | `client` | The API client |
 | `agentVersion` | The version to pin, instead of the lock's latest |
-| `system` | The system prompt for this session only, such as `channelSystem(agent, channel)` |
+| `system` | The system prompt for this session only, such as `channelSystem(instance, channel)` |
 | `title` | The session's title |
 | `budget` | The API's session budget, to cap what it can spend |
 | `pathOf` | How to show a file's path in messages |

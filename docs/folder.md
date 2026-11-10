@@ -2,13 +2,13 @@
 
 ## What's part of an agent
 
-`agent.md` and `env.md` are required, and everything else is optional. When agentschema reads a folder, it only takes these, and ignores everything else there, such as a README:
+`agent.md` and `computer.md` are required, and everything else is optional. When agentschema reads a folder, it only takes these, and ignores everything else there, such as a README:
 
 | Path | Read as |
 |---|---|
 | `agent.md` | [The agent](agent.md) |
 | `system_prompt/`, at any depth | [More of the system prompt](system_prompt.md), in `tree` order |
-| `env.md` | [Its environment](env.md) |
+| `computer.md` | [The computer it runs on](computer.md) |
 | `tools/`, at any depth | [Tool files](tools.md). Only `.md` files are tools, so helper code can sit beside them |
 | `skills/<name>/`, at any depth | [Skills](skills.md). Every file in the folder is uploaded |
 | `vaults/<vault>/` | [A vault and its credentials](vaults.md) |
@@ -30,7 +30,8 @@ Two more files can sit in the folder, and neither is part of the agent's definit
 
 Names are exact, so that an agent behaves the same on a case-sensitive file system:
 
-- `agent.md` and `env.md` must be lowercase. `AGENT.md` is an error that says what it found.
+- `agent.md` and `computer.md` must be lowercase. `AGENT.md` is an error that says what it found.
+- `env.md` is `computer.md`'s old name. A folder that still has it works, with a warning to rename it, and having both is an error.
 - `SKILL.md` must be uppercase.
 - `vault.md` means a vault's own settings, so it can't be a credential.
 
@@ -100,7 +101,7 @@ Internally, an agent is a file map: an object from paths to contents.
 ```js
 const files = {
   "agent.md": "---\nname: Support\nmodel: claude-opus-5-5\n---\n\nHelp people.\n",
-  "env.md": "---\nname: support\n---\n",
+  "computer.md": "---\nname: support\n---\n",
   "tools/linear.md": "…",
 };
 ```

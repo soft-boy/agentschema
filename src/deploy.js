@@ -2,7 +2,7 @@ import { join } from "node:path";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { CHANNELS_DIR, readChannels } from "../lib/channels.js";
 import { checkFiles } from "../lib/check.js";
-import { AGENT_FILE, ENV_FILE, agentBody, envBody } from "../lib/instance.js";
+import { AGENT_FILE, ENVIRONMENT_KEY, agentBody, envBody, environmentEntry, upgradeLock } from "../lib/instance.js";
 import { taskBody, taskKey, taskSettings } from "../lib/scheduled.js";
 import { skillKey, skillRefs } from "../lib/skills.js";
 import { AGENTBOOK } from "../lib/tools.js";
@@ -68,11 +68,10 @@ export async function deployFiles({
   });
 
   const steps = [
-    { file: ENV_FILE, kind: "environment", body: envBody(instance) },
-    { file: AGENT_FILE, kind: "agent", body: agentBody(instance, refs, checkOptions) },
+    { file: instance.env.file, key: ENVIRONMENT_KEY, kind: "environment", body: envBody(instance) },
+    { file: AGENT_FILE, key: `./${AGENT_FILE}`, kind: "agent", body: agentBody(instance, refs, checkOptions) },
   ];
   for (const step of steps) {
-    step.key = `./${step.file}`;
     step.hash = hashBody(step.body);
     step.entry = lock.resources[step.key];
     if (step.entry && step.entry.kind !== step.kind) {
@@ -122,7 +121,7 @@ export async function deployFiles({
 // deployment archived, because a schedule left behind would keep running, and costing money.
 async function deployScheduled(instance, { client, lock, dryRun, log, saveLock, pendingAgent, pendingVaults }) {
   const agentEntry = lock.resources[`./${AGENT_FILE}`];
-  const envEntry = lock.resources[`./${ENV_FILE}`];
+  const envEntry = environmentEntry(lock);
   const agent = { type: "agent", id: agentEntry?.id ?? "pending", version: pendingAgent || !agentEntry ? "pending" : Number(agentEntry.version) };
   const vaultIds = instance.vaults.map((vault) => lock.resources[vaultKey(vault)]?.id ?? (pendingVaults.includes(vaultKey(vault)) ? `pending:${vault.path}` : null)).filter(Boolean);
 
@@ -222,6 +221,7 @@ export function prepareLock(previous, client) {
   const baseURL = client.baseURL;
   const lock = previous ?? { version: 1, origin: { base_url: baseURL }, resources: {} };
   lock.resources ??= {};
+  upgradeLock(lock);
   if (lock.origin?.base_url && lock.origin.base_url !== baseURL) {
     throw new DeployError(
       `${LOCK_FILE} was written for ${lock.origin.base_url}, but this client uses ${baseURL}`,

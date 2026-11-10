@@ -7,7 +7,7 @@ import { archiveScheduled, deployFiles, pauseScheduled } from "../src/deploy.js"
 import { readFolder } from "../src/folder.js";
 import { AGENT_MD, ENV_MD, instance, toolset } from "./helpers.js";
 
-const BASE = { "agent.md": AGENT_MD, "env.md": ENV_MD };
+const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };
 const task = (front, body = "Say good morning in #gm.") => `---\n${front}\n---\n\n${body}\n`;
 const MORNING = task('schedule: "0 8 * * 1-5"\ntimezone: America/Los_Angeles');
 const checked = (files) => checkFiles({ ...BASE, ...files });
@@ -161,7 +161,7 @@ test("deploying makes a deployment, pinned to the agent's version, with its envi
     initial_events: [{ type: "user.message", content: [{ type: "text", text: "Say good morning in #gm." }] }],
     schedule: { type: "cron", expression: "0 8 * * 1-5", timezone: "America/Los_Angeles" },
     agent: { type: "agent", id: lock.resources["./agent.md"].id, version: 1 },
-    environment_id: lock.resources["./env.md"].id,
+    environment_id: lock.resources["./computer.md"].id,
     vault_ids: [lock.resources["./vaults/secrets"].id],
   });
   const entry = lock.resources["./scheduled/good-morning.md"];

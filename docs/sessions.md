@@ -13,7 +13,7 @@ A session is one conversation with a deployed agent. `agentschema run [dir]` sta
 
 It warns, without stopping, when:
 
-- `agent.md`, `system_prompt/`, `tools/`, `env.md` or a skill has changed since the last deploy. The session still uses the deployed version.
+- `agent.md`, `system_prompt/`, `tools/`, `computer.md` or a skill has changed since the last deploy. The session still uses the deployed version.
 - A vault hasn't been deployed, so the session doesn't have it.
 - A credential hasn't been created.
 

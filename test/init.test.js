@@ -20,7 +20,7 @@ test("init --yes scaffolds a folder that passes check", async () => {
   assert.match(agent, /^---\nname: Bug Triage\nmodel: claude-opus-5-5\n/);
   assert.doesNotMatch(agent, /tools/);
   assert.match(readFileSync(join(dir, "tools/agent_toolset_20260401.md"), "utf8"), /^---\ntype: agent_toolset_20260401\n---\n[\s\S]*\| `bash` \| `true` \| `auto` \|/);
-  assert.match(readFileSync(join(dir, "env.md"), "utf8"), /name: bug-triage/);
+  assert.match(readFileSync(join(dir, "computer.md"), "utf8"), /name: bug-triage/);
 });
 
 test("init uses the answers typed, by name or number", async () => {

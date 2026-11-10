@@ -14,7 +14,7 @@ warning: agent.md: unknown field `colour` will be sent to the API as written
 error: tools/get_weather.md: `description` is required
 ```
 
-If `agent.md` or `env.md` can't be read, `check` still reports what it can about the other files.
+If `agent.md` or `computer.md` can't be read, `check` still reports what it can about the other files.
 
 ## Unknown fields
 
@@ -22,7 +22,7 @@ Files that map to an API object are lenient, so a new API field works before age
 
 | File | An unknown field is |
 |---|---|
-| `agent.md`, `env.md`, and inside a credential's `auth` | A warning, and it's sent as written |
+| `agent.md`, `computer.md`, and inside a credential's `auth` | A warning, and it's sent as written |
 | `vault.md`, and a credential's top level | A warning, and it isn't sent, although the warning currently says it is |
 | Tool files, `channels/`, `scheduled/` | An error |
 
@@ -31,8 +31,8 @@ Files that map to an API object are lenient, so a new API field works before age
 ## What it compares across files
 
 - Every MCP server in `agent.md` has a toolset file, and every toolset file has a server.
-- MCP servers are reachable under `env.md`'s networking.
-- Environment variable credentials are reachable under `env.md`'s networking, and supported by its type.
+- MCP servers are reachable under `computer.md`'s networking.
+- Environment variable credentials are reachable under `computer.md`'s networking, and supported by its type.
 - Two vaults don't set the same variable, and one vault doesn't have two credentials for one server or variable.
 - Tool names are unique, and custom and agentbook tools don't collide.
 - `skills` in `agent.md` and `skills/` together fit the limit.

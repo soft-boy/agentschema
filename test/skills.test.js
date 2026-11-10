@@ -10,7 +10,7 @@ import { openSession } from "../src/session.js";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const SKILL_MD = "---\nname: code-review\ndescription: Review code for bugs. Use when asked to review a change.\n---\n\nRead `checklist.md` first.\n";
-const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, "skills/code-review/SKILL.md": SKILL_MD, ...files });
+const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, "skills/code-review/SKILL.md": SKILL_MD, ...files });
 const lockOf = (dir) => JSON.parse(readFileSync(join(dir, "claude-lock.json"), "utf8"));
 
 function fakeClient() {
@@ -68,7 +68,7 @@ function fakeClient() {
 }
 
 test("skills are checked", () => {
-  const errs = (files) => check(instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, ...files })).errors.join("\n");
+  const errs = (files) => check(instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...files })).errors.join("\n");
   const skill = (md) => ({ "skills/code-review/SKILL.md": md });
   assert.equal(errs(skill(SKILL_MD)), "");
   assert.match(errs({ "skills/code-review/notes.md": "x" }), /skills\/code-review: missing SKILL\.md/);
@@ -84,7 +84,7 @@ test("skills are checked", () => {
 });
 
 test("skills listed in agent.md must be in the API's shape", () => {
-  const errs = (list) => check(instance({ "agent.md": AGENT_MD.replace("model: claude-opus-5-5\n", `model: claude-opus-5-5\nskills:\n${list}`), "env.md": ENV_MD })).errors.join("\n");
+  const errs = (list) => check(instance({ "agent.md": AGENT_MD.replace("model: claude-opus-5-5\n", `model: claude-opus-5-5\nskills:\n${list}`), "computer.md": ENV_MD })).errors.join("\n");
   assert.equal(errs("  - type: anthropic\n    skill_id: xlsx\n  - type: custom\n    skill_id: skill_01Ab\n    version: latest\n"), "");
   assert.match(errs("  - ../skills/code-review\n"), /`skills\[0\]`: write this as a mapping.*attached without being listed/);
   assert.match(errs("  - type: plugin\n    skill_id: xlsx\n"), /`type` must be `anthropic` or `custom`/);
@@ -147,7 +147,7 @@ test("a first dry run shows what would be created, without creating it", async (
 
 test("skills in agent.md are kept, and the folder's are added", async () => {
   const agent = AGENT_MD.replace("model: claude-opus-5-5\n", "model: claude-opus-5-5\nskills:\n  - type: anthropic\n    skill_id: xlsx\n");
-  const dir = instance({ "agent.md": agent, "env.md": ENV_MD, "skills/code-review/SKILL.md": SKILL_MD });
+  const dir = instance({ "agent.md": agent, "computer.md": ENV_MD, "skills/code-review/SKILL.md": SKILL_MD });
   const client = fakeClient();
   await deploy(dir, { client });
   const { skills } = client.calls.find((c) => c[0] === "agent.create")[1];

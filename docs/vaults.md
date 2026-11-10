@@ -105,7 +105,7 @@ Across files, `check` also warns when:
 
 - Two vaults set the same variable, because the API doesn't document which wins.
 - The environment is self-hosted, which doesn't support these yet.
-- One of `allowed_hosts` isn't reachable under [`env.md`](env.md)'s limited networking.
+- One of `allowed_hosts` isn't reachable under [`computer.md`](computer.md)'s limited networking.
 
 ## Creating a credential
 

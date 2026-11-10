@@ -28,14 +28,14 @@ function examplesIn(text) {
 for (const page of DOCS) {
   test(`the examples in ${page} pass check`, () => {
     const examples = examplesIn(readFileSync(join(ROOT, page), "utf8"));
-    const { errors } = checkFiles({ "agent.md": AGENT_MD, "env.md": ENV_MD, ...examples });
+    const { errors } = checkFiles({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...examples });
     assert.deepEqual(errors, []);
   });
 }
 
 test("the examples are where they say they are", () => {
   const all = DOCS.flatMap((page) => Object.keys(examplesIn(readFileSync(join(ROOT, page), "utf8"))));
-  for (const kind of ["agent.md", "env.md", "tools/", "skills/", "vaults/", "channels/", "scheduled/", "system_prompt/"]) {
+  for (const kind of ["agent.md", "computer.md", "tools/", "skills/", "vaults/", "channels/", "scheduled/", "system_prompt/"]) {
     assert.ok(all.some((path) => path.startsWith(kind)), `no example of ${kind}`);
   }
 });

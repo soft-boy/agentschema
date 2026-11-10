@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { AGENT_FILE, ENV_FILE } from "../lib/instance.js";
+import { AGENT_FILE, COMPUTER_FILE } from "../lib/instance.js";
 import { MODELS, NETWORKING, defaultAnswers, scaffold } from "../lib/scaffold.js";
 import { TOOLSET_FILE, TOOLS_DIR } from "../lib/tools.js";
 import { choosePermission } from "./tools-menu.js";
@@ -27,7 +27,7 @@ export async function init(dir, { yes = false, input = process.stdin, output = p
   }
 
   const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${TOOLSET_FILE} with the pre-built tools (set Enabled to false to turn one off)` : "";
-  output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${ENV_FILE}${tools}.\n\nNext:\n`);
+  output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${COMPUTER_FILE}${tools}.\n\nNext:\n`);
   output.write(`  agentschema deploy ${dir}\n  agentschema run ${dir}\n`);
   return files;
 }

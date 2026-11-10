@@ -27,24 +27,24 @@ test("the body becomes the system prompt", () => {
 });
 
 test("an empty body sends no system prompt", () => {
-  const { instance: inst } = check(instance({ "agent.md": "---\nname: a\nmodel: m\n---\n", "env.md": ENV_MD }));
+  const { instance: inst } = check(instance({ "agent.md": "---\nname: a\nmodel: m\n---\n", "computer.md": ENV_MD }));
   assert.equal("system" in agentBody(inst), false);
 });
 
 test("both files are required, with lowercase names", () => {
-  assert.match(errorsFor({ "env.md": ENV_MD })[0], /agent\.md: missing/);
-  assert.match(errorsFor({ "agent.md": AGENT_MD })[0], /env\.md: missing/);
-  assert.match(errorsFor({ "AGENT.md": AGENT_MD, "env.md": ENV_MD })[0], /found AGENT\.md; the name must be lowercase/);
+  assert.match(errorsFor({ "computer.md": ENV_MD })[0], /agent\.md: missing/);
+  assert.match(errorsFor({ "agent.md": AGENT_MD })[0], /computer\.md: missing/);
+  assert.match(errorsFor({ "AGENT.md": AGENT_MD, "computer.md": ENV_MD })[0], /found AGENT\.md; the name must be lowercase/);
 });
 
 test("frontmatter must be present, closed and valid YAML", () => {
-  assert.match(errorsFor({ "agent.md": "name: a\n", "env.md": ENV_MD })[0], /must start with YAML frontmatter/);
-  assert.match(errorsFor({ "agent.md": "---\nname: a\n", "env.md": ENV_MD })[0], /not closed/);
-  assert.match(errorsFor({ "agent.md": "---\nname: [a\n---\n", "env.md": ENV_MD })[0], /agent\.md:\d+: invalid YAML/);
+  assert.match(errorsFor({ "agent.md": "name: a\n", "computer.md": ENV_MD })[0], /must start with YAML frontmatter/);
+  assert.match(errorsFor({ "agent.md": "---\nname: a\n", "computer.md": ENV_MD })[0], /not closed/);
+  assert.match(errorsFor({ "agent.md": "---\nname: [a\n---\n", "computer.md": ENV_MD })[0], /agent\.md:\d+: invalid YAML/);
 });
 
 test("agent.md needs name and model, and no system key", () => {
-  const errors = errorsFor({ "agent.md": "---\nsystem: hi\n---\n", "env.md": ENV_MD });
+  const errors = errorsFor({ "agent.md": "---\nsystem: hi\n---\n", "computer.md": ENV_MD });
   assert.ok(errors.some((e) => e.includes("`name` is required")));
   assert.ok(errors.some((e) => e.includes("`model` is required")));
   assert.ok(errors.some((e) => e.includes("`system` is not allowed")));
@@ -52,24 +52,24 @@ test("agent.md needs name and model, and no system key", () => {
 
 test("model may be an object with an id", () => {
   const agent = "---\nname: a\nmodel: {id: claude-opus-5-5, effort: high}\n---\n";
-  assert.deepEqual(errorsFor({ "agent.md": agent, "env.md": ENV_MD }), []);
+  assert.deepEqual(errorsFor({ "agent.md": agent, "computer.md": ENV_MD }), []);
 });
 
-test("env.md config types are checked", () => {
+test("computer.md config types are checked", () => {
   const env = "---\nname: e\nconfig:\n  type: docker\n  networking: {type: open}\n---\n";
-  const errors = errorsFor({ "agent.md": AGENT_MD, "env.md": env });
+  const errors = errorsFor({ "agent.md": AGENT_MD, "computer.md": env });
   assert.ok(errors.some((e) => e.includes("`config.type`")));
   assert.ok(errors.some((e) => e.includes("`config.networking.type`")));
 });
 
 test("secrets are rejected", () => {
   const agent = AGENT_MD.replace("assistant.", "assistant. Use sk-ant-api03-abcdefghijklmnop.");
-  assert.match(errorsFor({ "agent.md": agent, "env.md": ENV_MD })[0], /Anthropic API key/);
+  assert.match(errorsFor({ "agent.md": agent, "computer.md": ENV_MD })[0], /Anthropic API key/);
 });
 
 test("unknown fields are warnings, not errors", () => {
   const agent = AGENT_MD.replace("model:", "colour: blue\nmodel:");
-  const { errors, warnings } = check(instance({ "agent.md": agent, "env.md": ENV_MD }));
+  const { errors, warnings } = check(instance({ "agent.md": agent, "computer.md": ENV_MD }));
   assert.deepEqual(errors, []);
   assert.match(warnings[0], /unknown field `colour`/);
 });

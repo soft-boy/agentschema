@@ -31,7 +31,7 @@ auth:
 ---
 `;
 
-const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "env.md": ENV_MD, ...files });
+const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...files });
 const errorsFor = (files) => check(folder(files)).errors.join("\n");
 const lockOf = (dir) => JSON.parse(readFileSync(join(dir, "claude-lock.json"), "utf8"));
 
@@ -225,7 +225,7 @@ The billing agent's Stripe key.
 const stripeEnv = ENV_MD.replace("type: limited\n", "type: limited\n    allowed_hosts:\n      - api.stripe.com\n");
 
 test("environment variable credentials are checked", () => {
-  const errs = (md, env = stripeEnv) => check(instance({ "agent.md": AGENT_MD, "env.md": env, "vaults/Ops/Stripe.md": md })).errors.join("\n");
+  const errs = (md, env = stripeEnv) => check(instance({ "agent.md": AGENT_MD, "computer.md": env, "vaults/Ops/Stripe.md": md })).errors.join("\n");
   assert.equal(errs(STRIPE_MD), "");
   assert.match(errs(STRIPE_MD.replace("  networking:", "  secret_value: abc\n  networking:")), /`auth.secret_value` doesn't go in the file/);
   assert.match(errs(STRIPE_MD.replace("STRIPE_API_KEY", "not a name")), /`auth.secret_name` is required/);
@@ -233,13 +233,13 @@ test("environment variable credentials are checked", () => {
   assert.match(errs(STRIPE_MD.replace("      - api.stripe.com\n", "").replace("allowed_hosts:", "allowed_hosts: []")), /allowed_hosts` must list the hosts/);
   assert.match(errs(STRIPE_MD.replace("header: true", "header: false")), /must enable `header` or `body`/);
   assert.match(
-    check(instance({ "agent.md": AGENT_MD, "env.md": stripeEnv, "vaults/Ops/A.md": STRIPE_MD, "vaults/Ops/B.md": STRIPE_MD })).errors.join("\n"),
+    check(instance({ "agent.md": AGENT_MD, "computer.md": stripeEnv, "vaults/Ops/A.md": STRIPE_MD, "vaults/Ops/B.md": STRIPE_MD })).errors.join("\n"),
     /already sets STRIPE_API_KEY; a vault holds one per variable/,
   );
 });
 
 test("environment variable credentials warn about what they depend on", () => {
-  const warningsFor = (files, env = stripeEnv) => check(instance({ "agent.md": AGENT_MD, "env.md": env, ...files })).warnings.join("\n");
+  const warningsFor = (files, env = stripeEnv) => check(instance({ "agent.md": AGENT_MD, "computer.md": env, ...files })).warnings.join("\n");
   assert.equal(warningsFor({ "vaults/Ops/Stripe.md": STRIPE_MD }), "");
   assert.match(warningsFor({ "vaults/Ops/Stripe.md": STRIPE_MD }, ENV_MD), /limited networking doesn't allow api\.stripe\.com/);
   assert.match(warningsFor({ "vaults/Ops/Stripe.md": STRIPE_MD.replace(/type: limited\n\s+allowed_hosts:\n\s+- api\.stripe\.com/, "type: unrestricted") }), /substituted on requests to any host/);
@@ -248,7 +248,7 @@ test("environment variable credentials warn about what they depend on", () => {
 });
 
 test("an environment variable credential sends its value on create, and its settings on update", async () => {
-  const dir = instance({ "agent.md": AGENT_MD, "env.md": stripeEnv, "vaults/Ops/Stripe.md": STRIPE_MD });
+  const dir = instance({ "agent.md": AGENT_MD, "computer.md": stripeEnv, "vaults/Ops/Stripe.md": STRIPE_MD });
   const client = fakeClient();
   let validated = false;
   client.beta.vaults.credentials.mcpOAuthValidate = async () => { validated = true; return { status: "valid" }; };

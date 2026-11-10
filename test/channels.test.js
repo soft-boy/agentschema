@@ -5,7 +5,7 @@ import { checkFiles } from "../lib/check.js";
 import { agentBody } from "../lib/instance.js";
 import { AGENT_MD, ENV_MD, PREBUILT_MD } from "./helpers.js";
 
-const BASE = { "agent.md": AGENT_MD, "env.md": ENV_MD };
+const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };
 const file = (front, body = "") => `---\n${front}\n---\n\n${body}`;
 const checked = (files, options) => checkFiles({ ...BASE, ...files }, options);
 const errorsFor = (front, body) => checked({ "channels/c.md": file(front, body) }).errors;
@@ -182,7 +182,7 @@ test("the channel's text counts towards the system prompt's limit", () => {
 const MCP = (rows, front = "") => `---\ntype: mcp_toolset\nmcp_server_name: bank\n${front}---\n\n${rows ? `## Tools\n\n| Name | Enabled | Permission |\n|---|---|---|\n${rows}\n` : ""}`;
 const AGENT_WITH_BANK = AGENT_MD.replace("model:", "mcp_servers:\n  - {type: url, name: bank, url: 'https://bank.example.com/mcp'}\nmodel:");
 const ENV_WITH_MCP = ENV_MD.replace("type: limited", "type: limited\n    allow_mcp_servers: true");
-const withBank = (tool, channel = VALID.telegram) => checkFiles({ "agent.md": AGENT_WITH_BANK, "env.md": ENV_WITH_MCP, "tools/bank.md": tool, "channels/c.md": file(channel) });
+const withBank = (tool, channel = VALID.telegram) => checkFiles({ "agent.md": AGENT_WITH_BANK, "computer.md": ENV_WITH_MCP, "tools/bank.md": tool, "channels/c.md": file(channel) });
 
 test("an open channel warns about tools that act for the owner without asking", () => {
   const { errors, warnings } = withBank(MCP("| pay | true | always_allow |\n| read | true | auto |\n| list | true | always_ask |\n| off | false | always_allow |\n| blank | true | |"));

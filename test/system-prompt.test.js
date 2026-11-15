@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { channelSystem, readChannels } from "../lib/channels.js";
-import { checkFiles } from "../lib/check.js";
-import { agentBody } from "../lib/instance.js";
-import { comparePaths } from "../lib/files.js";
-import { readSystemPrompt, systemPromptOf } from "../lib/system-prompt.js";
-import { deployFiles } from "../src/deploy.js";
-import { readFolder } from "../src/folder.js";
+import { channelSystem, readChannels } from "../lib/channels.ts";
+import { checkFiles } from "../lib/check.ts";
+import { agentBody } from "../lib/instance.ts";
+import { comparePaths } from "../lib/files.ts";
+import { readSystemPrompt, systemPromptOf } from "../lib/system-prompt.ts";
+import { deployFiles } from "../src/deploy.ts";
+import { readFolder } from "../src/folder.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };

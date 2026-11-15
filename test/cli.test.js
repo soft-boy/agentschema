@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
-const cli = (...args) => spawnSync(process.execPath, ["bin/agentschema.js", ...args], { encoding: "utf8" });
+const cli = (...args) => spawnSync(process.execPath, ["bin/agentschema.ts", ...args], { encoding: "utf8" });
 
 test("the top-level help lists command groups; each group's help lists its commands", () => {
   const top = cli("-h").stdout;

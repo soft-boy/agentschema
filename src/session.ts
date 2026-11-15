@@ -1,0 +1,254 @@
+import { join } from "node:path";
+import type Anthropic from "@anthropic-ai/sdk";
+import type { Stream } from "@anthropic-ai/sdk/core/streaming";
+import type * as EventsAPI from "@anthropic-ai/sdk/resources/beta/sessions/events";
+import type * as SessionsAPI from "@anthropic-ai/sdk/resources/beta/sessions/sessions";
+import type { Instance, Lock } from "../lib/instance.ts";
+import { AGENT_FILE, agentBody, envBody, environmentEntry } from "../lib/instance.ts";
+import { SYSTEM_PROMPT_DIR } from "../lib/system-prompt.ts";
+import { skillKey, skillRefs } from "../lib/skills.ts";
+import { TOOLS_DIR } from "../lib/tools.ts";
+import { credentialKey, vaultKey } from "../lib/vaults.ts";
+import { check } from "./check.ts";
+import { LOCK_FILE, hashBody, readLock, skillFingerprint } from "./lock.ts";
+
+export type Session = SessionsAPI.BetaManagedAgentsSession;
+// Any event a session's stream or history yields, including the stream-only event_start / event_delta.
+export type SessionEvent = EventsAPI.BetaManagedAgentsStreamSessionEvents;
+// A tool call that may need confirming: built-in or MCP.
+export type ToolUseEvent = EventsAPI.BetaManagedAgentsAgentToolUseEvent | EventsAPI.BetaManagedAgentsAgentMCPToolUseEvent;
+export type CustomToolUseEvent = EventsAPI.BetaManagedAgentsAgentCustomToolUseEvent;
+
+// What a turn ends with: the idle stop reason, or "terminated".
+export type TurnOutcome = Exclude<EventsAPI.BetaManagedAgentsSessionStatusIdleEvent["stop_reason"]["type"], "requires_action"> | "terminated";
+
+export interface StartedSession {
+  session: Session;
+  notes: string[];
+}
+
+export interface OpenSessionOptions {
+  client: Anthropic;
+  sessionId?: string;
+}
+
+export interface StartSessionOptions {
+  instance?: Instance | null;
+  lock: Lock | null | undefined;
+  client: Anthropic;
+  agentVersion?: number | string;
+  system?: string;
+  title?: string;
+  budget?: SessionsAPI.BetaManagedAgentsBudgetLimit;
+  pathOf?: (file: string) => string;
+}
+
+export interface ToolConfirmation {
+  result: "allow" | "deny";
+  deny_message?: string;
+}
+
+export interface CustomToolResult {
+  text: string;
+  isError?: boolean;
+}
+
+export interface ConversationUI {
+  event(event: SessionEvent): void;
+  confirm(event: ToolUseEvent): ToolConfirmation | Promise<ToolConfirmation>;
+  customToolResult(event: CustomToolUseEvent): string | CustomToolResult | Promise<string | CustomToolResult>;
+}
+
+export class SessionError extends Error {}
+
+// Starts a session on the agent and environment recorded in claude-lock.json, or resumes `sessionId`.
+// Returns { session, notes }: notes are warnings worth showing, such as files changed since the last deploy.
+export async function openSession(dir: string, { client, sessionId }: OpenSessionOptions): Promise<StartedSession> {
+  if (sessionId) {
+    const session = await client.beta.sessions.retrieve(sessionId);
+    if (session.status === "terminated") throw new SessionError(`session ${sessionId} has terminated`);
+    return { session, notes: [] };
+  }
+
+  const lock = readLock(dir);
+  const agent = lock?.resources?.[`./${AGENT_FILE}`];
+  const env = environmentEntry(lock);
+  if (!agent || !env) {
+    throw new SessionError(`${dir} hasn't been deployed (no agent or environment in ${LOCK_FILE}); run agentschema deploy first`);
+  }
+
+  const notes: string[] = [];
+  const { instance, errors } = check(dir);
+  if (instance && errors.length === 0) {
+    if (hashBody(agentBody(instance, skillRefs(instance.skills, lock))) !== agent.hash) {
+      notes.push(`${AGENT_FILE}, ${SYSTEM_PROMPT_DIR}/ or ${TOOLS_DIR}/ has changed since the last deploy`);
+    }
+    for (const skill of instance.skills) {
+      if (hashBody(skillFingerprint(skill)) !== lock!.resources![skillKey(skill)]?.hash) notes.push(`${skill.path} has changed since the last deploy`);
+    }
+    if (hashBody(envBody(instance)) !== env.hash) notes.push(`${instance.env.file} has changed since the last deploy`);
+    if (notes.length > 0) notes.push(`this session uses the deployed version; run agentschema deploy to pick up the changes`);
+  }
+
+  const name = instance?.agent.data.name;
+  const started = await startSession({
+    instance,
+    lock,
+    client,
+    title: name ? `${name} (agentschema run)` : "agentschema run",
+    pathOf: (file: string) => join(dir, file),
+  });
+  return { session: started.session, notes: [...notes, ...started.notes] };
+}
+
+// Starts a session from a lock, pinned to a deployed version, so it runs exactly what deploy sent.
+//
+//   instance      the checked files, for finding the vaults to attach
+//   agentVersion  the agent version to pin, instead of the lock's latest
+//   system        the system prompt for this session only, such as with a channel's instructions added
+//   budget        the API's session budget, to cap what the session can spend
+//   pathOf        how to show a file's path to the user in messages
+//
+// Returns { session, notes }.
+export async function startSession({ instance, lock, client, agentVersion, system, title, budget, pathOf = (file) => file }: StartSessionOptions): Promise<StartedSession> {
+  const agent = lock?.resources?.[`./${AGENT_FILE}`];
+  const env = environmentEntry(lock);
+  if (!agent || !env) throw new SessionError("this agent hasn't been deployed (no agent or environment in its lock)");
+
+  const pinned = { id: agent.id, version: Number(agentVersion ?? agent.version) };
+  const params: SessionsAPI.SessionCreateParams = {
+    // Overriding affects this session only, and doesn't change the agent or make a new version of it.
+    agent: system === undefined ? { type: "agent", ...pinned } : { type: "agent_with_overrides", ...pinned, system },
+    environment_id: env.id,
+  };
+
+  // Every deployed vault in vaults/, in name order: when two hold a credential for the same
+  // server, the first one wins.
+  const notes: string[] = [];
+  const vaultIds: string[] = [];
+  for (const vault of instance?.vaults ?? []) {
+    const entry = lock!.resources![vaultKey(vault)];
+    if (!entry) {
+      notes.push(`vault ${vault.path} hasn't been deployed, so this session doesn't have it; run agentschema deploy`);
+      continue;
+    }
+    vaultIds.push(entry.id);
+    for (const cred of vault.credentials) {
+      const credEntry = lock!.resources![credentialKey(cred)];
+      if (!credEntry || credEntry.vault_id !== entry.id) {
+        notes.push(`credential ${cred.file} hasn't been created; run agentschema cred deploy ${pathOf(cred.file)}`);
+      }
+    }
+  }
+  if (vaultIds.length > 0) params.vault_ids = vaultIds;
+  if (title) params.title = title;
+  if (budget) params.budget = budget;
+  return { session: await client.beta.sessions.create(params), notes };
+}
+
+// Drives a session one turn at a time. `ui` answers what only a person can:
+//   ui.event(event)          show an event, including the stream-only event_start / event_delta previews
+//   ui.confirm(event)        -> { result: "allow" | "deny", deny_message? } for a paused tool call
+//   ui.customToolResult(event) -> string, or { text, isError }: the result of a custom tool call
+export class Conversation {
+  client: Anthropic;
+  sessionId: string;
+  ui: ConversationUI;
+  seen: Set<string>;
+  stream: Stream<SessionEvent> | null;
+  closed?: boolean;
+
+  constructor(client: Anthropic, sessionId: string, ui: ConversationUI) {
+    this.client = client;
+    this.sessionId = sessionId;
+    this.ui = ui;
+    this.seen = new Set();
+    this.stream = null;
+  }
+
+  // Sends a message and handles events until the agent finishes its turn.
+  // Returns the idle stop reason, or "terminated".
+  async send(text: string): Promise<TurnOutcome> {
+    return this.#turn([{ type: "user.message", content: [{ type: "text", text }] }]);
+  }
+
+  // Asks the agent to stop at the next safe point; the running turn then ends normally.
+  async interrupt(): Promise<void> {
+    await this.client.beta.sessions.events.send(this.sessionId, { events: [{ type: "user.interrupt" }] });
+  }
+
+  async #turn(events: EventsAPI.BetaManagedAgentsEventParams[]): Promise<TurnOutcome> {
+    // Stream first: events emitted before the stream opens would never reach us.
+    this.stream = await this.#openStream();
+    await this.client.beta.sessions.events.send(this.sessionId, { events });
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        for await (const event of this.stream) {
+          const done = await this.#handle(event);
+          if (done) return done;
+        }
+        throw new Error("event stream closed");
+      } catch (err) {
+        if (this.closed || attempt >= 3) throw err;
+        // The stream has no replay: reopen it, then catch up from the event history.
+        this.stream = await this.#openStream();
+        for await (const event of this.client.beta.sessions.events.list(this.sessionId)) {
+          const done = await this.#handle(event);
+          if (done) return done;
+        }
+      }
+    }
+  }
+
+  // Opts in to live previews, so agent text arrives as event_start / event_delta events while
+  // the model is still writing, ahead of the complete agent.message.
+  #openStream(): Promise<Stream<SessionEvent>> {
+    return this.client.beta.sessions.events.stream(this.sessionId, { event_deltas: ["agent.message"] });
+  }
+
+  // Returns a value when the turn is over.
+  // (Every event has an id but event_start / event_delta, hence the intersection.)
+  async #handle(event: SessionEvent & { id?: string }): Promise<TurnOutcome | null> {
+    // Events are deduped by ID: the history and the live stream overlap after a reconnect,
+    // and a queued user event is echoed twice.
+    if (event.id) {
+      if (this.seen.has(event.id)) return null;
+      this.seen.add(event.id);
+    }
+    this.ui.event(event);
+
+    const send = (e: EventsAPI.BetaManagedAgentsEventParams) => this.client.beta.sessions.events.send(this.sessionId, { events: [e] });
+    switch (event.type) {
+      case "agent.tool_use":
+      case "agent.mcp_tool_use":
+        if (event.evaluated_permission === "ask") {
+          const { result, deny_message } = await this.ui.confirm(event);
+          const reply: EventsAPI.BetaManagedAgentsUserToolConfirmationEventParams = { type: "user.tool_confirmation", tool_use_id: event.id, result };
+          if (result === "deny" && deny_message) reply.deny_message = deny_message;
+          await send(reply);
+        }
+        return null;
+      case "agent.custom_tool_use": {
+        const result = await this.ui.customToolResult(event);
+        const { text, isError }: CustomToolResult = typeof result === "string" ? { text: result } : result;
+        const reply: EventsAPI.BetaManagedAgentsUserCustomToolResultEventParams = { type: "user.custom_tool_result", custom_tool_use_id: event.id, content: [{ type: "text", text }] };
+        if (isError) reply.is_error = true;
+        await send(reply);
+        return null;
+      }
+      case "session.status_idle":
+        // requires_action means the session is waiting on one of the replies above.
+        return event.stop_reason?.type === "requires_action" ? null : (event.stop_reason?.type ?? "end_turn");
+      case "session.status_terminated":
+        return "terminated";
+      default:
+        return null;
+    }
+  }
+
+  close(): void {
+    this.closed = true;
+    this.stream?.controller?.abort();
+  }
+}

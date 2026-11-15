@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
-import { runTool } from "../src/chat.js";
-import { check } from "../src/check.js";
-import { agentBody } from "../lib/instance.js";
+import { runTool } from "../src/chat.ts";
+import { check } from "../src/check.ts";
+import { agentBody } from "../lib/instance.ts";
 import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
 
 const READ_FILE_MD = `---

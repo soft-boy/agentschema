@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
-import { check } from "../src/check.js";
-import { InitError, defaults, init } from "../src/init.js";
+import { check } from "../src/check.ts";
+import { InitError, defaults, init } from "../src/init.ts";
 
 const parent = () => mkdtempSync(join(tmpdir(), "agentschema-init-"));
 const silent = () => new PassThrough();

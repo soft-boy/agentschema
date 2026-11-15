@@ -3,10 +3,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import Anthropic from "@anthropic-ai/sdk";
-import { check } from "../src/check.js";
-import { credDelete, credLogin, credPaste } from "../src/cred.js";
-import { DeployError, deploy } from "../src/deploy.js";
-import { openSession } from "../src/session.js";
+import { check } from "../src/check.ts";
+import { credDelete, credLogin, credPaste } from "../src/cred.ts";
+import { DeployError, deploy } from "../src/deploy.ts";
+import { openSession } from "../src/session.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const SLACK_MD = `---

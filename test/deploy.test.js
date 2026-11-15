@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import Anthropic from "@anthropic-ai/sdk";
-import { DeployError, deploy } from "../src/deploy.js";
+import { DeployError, deploy } from "../src/deploy.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 // Records calls and keeps resources in memory, in place of the real API client.

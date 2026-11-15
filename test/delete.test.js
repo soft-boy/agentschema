@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DeleteError, deleteAgent, deleteSession } from "../src/delete.js";
+import { DeleteError, deleteAgent, deleteSession } from "../src/delete.ts";
 
 function fakeClient({ agent = {}, session = {} } = {}) {
   const calls = [];

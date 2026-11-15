@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CHANNEL_TYPES, channelSettings, channelSystem, durationMs, readChannels } from "../lib/channels.js";
-import { checkFiles } from "../lib/check.js";
-import { agentBody } from "../lib/instance.js";
+import { CHANNEL_TYPES, channelSettings, channelSystem, durationMs, readChannels } from "../lib/channels.ts";
+import { checkFiles } from "../lib/check.ts";
+import { agentBody } from "../lib/instance.ts";
 import { AGENT_MD, ENV_MD, PREBUILT_MD } from "./helpers.js";
 
 const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };

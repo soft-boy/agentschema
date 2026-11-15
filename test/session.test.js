@@ -3,10 +3,10 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
-import { textStream } from "../lib/stream.js";
-import { chat } from "../src/chat.js";
-import { deploy } from "../src/deploy.js";
-import { Conversation, SessionError, openSession, startSession } from "../src/session.js";
+import { textStream } from "../lib/stream.ts";
+import { chat } from "../src/chat.ts";
+import { deploy } from "../src/deploy.ts";
+import { Conversation, SessionError, openSession, startSession } from "../src/session.ts";
 import { AGENT_MD, instance } from "./helpers.js";
 
 let n = 0;

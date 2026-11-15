@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { loadEnvFile, parseEnvFile } from "../src/dotenv.js";
+import { loadEnvFile, parseEnvFile } from "../src/dotenv.ts";
 import { AGENT_MD, ENV_MD } from "./helpers.js";
 
 const folder = () => mkdtempSync(join(tmpdir(), "agentschema-dotenv-"));
@@ -81,7 +81,7 @@ test("run gives the folder's .env to custom tools, but not to the Anthropic clie
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
 
   try {
-    const child = spawn(process.execPath, ["bin/agentschema.js", "run", dir], {
+    const child = spawn(process.execPath, ["bin/agentschema.ts", "run", dir], {
       env: { PATH: process.env.PATH, ANTHROPIC_API_KEY: "key_from_shell", ANTHROPIC_BASE_URL: `http://127.0.0.1:${server.address().port}`, FROM_SHELL: "shell" },
       stdio: ["pipe", "ignore", "inherit"],
     });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { listAgents, listSessions } from "../src/list.js";
+import { listAgents, listSessions } from "../src/list.ts";
 
 const pages = (items) => ({ async *[Symbol.asyncIterator]() { yield* items; } });
 const client = ({ agents = [], sessions = [] }) => ({

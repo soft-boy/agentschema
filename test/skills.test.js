@@ -4,9 +4,9 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { test } from "node:test";
 import Anthropic from "@anthropic-ai/sdk";
-import { check } from "../src/check.js";
-import { deploy } from "../src/deploy.js";
-import { openSession } from "../src/session.js";
+import { check } from "../src/check.ts";
+import { deploy } from "../src/deploy.ts";
+import { openSession } from "../src/session.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 const SKILL_MD = "---\nname: code-review\ndescription: Review code for bugs. Use when asked to review a change.\n---\n\nRead `checklist.md` first.\n";

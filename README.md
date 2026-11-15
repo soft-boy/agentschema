@@ -230,12 +230,18 @@ const { errors, warnings } = checkFiles(files);
 const { plan, lock } = await deployFiles({ files, lock: savedLock, client, saveLock });
 ```
 
+Both entry points ship with TypeScript declarations, including types for the shapes they take and return (`FileMap`, `CheckResult`, `Instance`, `DeployResult`, …).
+
 ## Development
+
+The source is TypeScript, in `bin/`, `lib/` and `src/`. Node 22.18 or later runs it as it is, so `node bin/agentschema.ts` works without a build; the published package is compiled to JavaScript and type declarations in `dist/`, and runs on Node 18.
 
 ```sh
 npm install
-npm test    # unit tests; deploy runs against a fake API client
-npm link    # makes `agentschema` available globally from this checkout
+npm run typecheck   # tsc, without writing files
+npm run build       # compiles to dist/
+npm test            # builds, then runs the unit tests; deploy runs against a fake API client
+npm link            # makes `agentschema` available globally from this checkout (run npm run build first)
 ```
 
 ## License

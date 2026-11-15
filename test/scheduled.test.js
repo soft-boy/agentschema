@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import Anthropic from "@anthropic-ai/sdk";
-import { checkFiles } from "../lib/check.js";
-import { cronProblem, readScheduled, taskBody, taskSettings } from "../lib/scheduled.js";
-import { archiveScheduled, deployFiles, pauseScheduled } from "../src/deploy.js";
-import { readFolder } from "../src/folder.js";
+import { checkFiles } from "../lib/check.ts";
+import { cronProblem, readScheduled, taskBody, taskSettings } from "../lib/scheduled.ts";
+import { archiveScheduled, deployFiles, pauseScheduled } from "../src/deploy.ts";
+import { readFolder } from "../src/folder.ts";
 import { AGENT_MD, ENV_MD, instance, toolset } from "./helpers.js";
 
 const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };

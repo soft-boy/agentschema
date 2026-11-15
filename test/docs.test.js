@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { checkFiles } from "../lib/check.js";
+import { checkFiles } from "../lib/check.ts";
 import { AGENT_MD, ENV_MD } from "./helpers.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));

@@ -4,18 +4,23 @@
   "description": "Markdown based AI agent schema",
   "type": "module",
   "bin": {
-    "agentschema": "bin/agentschema.js",
-    "ags": "bin/agentschema.js"
+    "agentschema": "dist/bin/agentschema.js",
+    "ags": "dist/bin/agentschema.js"
   },
+  "types": "./dist/lib/index.d.ts",
   "exports": {
-    ".": "./lib/index.js",
-    "./node": "./src/node.js",
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "default": "./dist/lib/index.js"
+    },
+    "./node": {
+      "types": "./dist/src/node.d.ts",
+      "default": "./dist/src/node.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "bin",
-    "lib",
-    "src"
+    "dist"
   ],
   "engines": {
     "node": ">=18"
@@ -28,7 +33,14 @@
     "@anthropic-ai/sdk": "^1.4.0",
     "yaml": "^2.9.1"
   },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.js",
+    "prepack": "npm run build"
   }
 }

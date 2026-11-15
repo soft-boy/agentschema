@@ -4,11 +4,11 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
-import { check } from "../src/check.js";
-import { agentBody } from "../lib/instance.js";
-import { prompts } from "../src/prompts.js";
-import { runTool } from "../src/chat.js";
-import { toolsCreate } from "../src/tools-menu.js";
+import { check } from "../src/check.ts";
+import { agentBody } from "../lib/instance.ts";
+import { prompts } from "../src/prompts.ts";
+import { runTool } from "../src/chat.ts";
+import { toolsCreate } from "../src/tools-menu.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 // The menu, answered through piped input: one line per question.

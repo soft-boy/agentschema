@@ -5,12 +5,12 @@ import { createServer } from "node:http";
 import { PassThrough } from "node:stream";
 import { join } from "node:path";
 import { test } from "node:test";
-import { check } from "../src/check.js";
-import { credCreate, credDeploy } from "../src/cred-menu.js";
-import { credLogin } from "../src/cred.js";
-import { prompts } from "../src/prompts.js";
-import { builtInFile } from "../lib/scaffold.js";
-import { mcpToolsetFile } from "../lib/tools.js";
+import { check } from "../src/check.ts";
+import { credCreate, credDeploy } from "../src/cred-menu.ts";
+import { credLogin } from "../src/cred.ts";
+import { prompts } from "../src/prompts.ts";
+import { builtInFile } from "../lib/scaffold.ts";
+import { mcpToolsetFile } from "../lib/tools.ts";
 import { AGENT_MD, ENV_MD, instance } from "./helpers.js";
 
 // A local MCP server and authorization server: protected resource metadata, authorization
@@ -164,7 +164,7 @@ test("cred login finds a sign-in that only the server's 401 points to", async ()
 });
 
 test("discover reads a resource_metadata link written without quotes", async () => {
-  const { discover } = await import("../src/oauth.js");
+  const { discover } = await import("../src/oauth.ts");
   const metadata = "https://api.example/v1/mcp/.well-known/oauth-protected-resource";
   const fakeFetch = async (url, init = {}) => {
     if (init.method === "POST") return new Response(null, { status: 401, headers: { "www-authenticate": `Bearer resource_metadata=${metadata}, error="invalid_token"` } });
@@ -330,7 +330,7 @@ test("cred create warns when the environment blocks the variable's host, and can
 });
 
 test("the library can register under its own name, and manage credentials on a lock object", async () => {
-  const { authorizationRequest, createCredential, deleteCredential, discover, exchangeCode, registerClient } = await import("../src/node.js");
+  const { authorizationRequest, createCredential, deleteCredential, discover, exchangeCode, registerClient } = await import("../src/node.ts");
   assert.equal(typeof discover, "function");
   assert.equal(typeof authorizationRequest, "function");
   assert.equal(typeof exchangeCode, "function");

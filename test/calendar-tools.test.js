@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { runTool } from "../src/chat.js";
-import { check } from "../src/check.js";
-import { agentBody } from "../lib/instance.js";
+import { runTool } from "../src/chat.ts";
+import { check } from "../src/check.ts";
+import { agentBody } from "../lib/instance.ts";
 
 const dir = fileURLToPath(new URL("../examples/calendar-agent", import.meta.url));
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });

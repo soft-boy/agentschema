@@ -72,7 +72,7 @@ export function checkFiles(files: FileMap, options: CheckOptions = {}): CheckRes
 
   const vaultFiles = vaults.flatMap((v): Scanned[] => [...(v.file ? [[`${v.path}/${VAULT_FILE}`, v.file] satisfies Scanned] : []), ...v.credentials.map((c): Scanned => [c.file, c])]);
   const skillTexts = skills.flatMap((s) => s.files.map((f): Scanned => [`${s.path}/${f.rel}`, { raw: textOf(f.bytes) }]));
-  const scanned: Scanned[] = [[AGENT_FILE, agent], [env?.file, env], ...tools.map((t): Scanned => [t.file, t]), ...vaultFiles, ...skillTexts, ...channels.map((c): Scanned => [c.file, c]), ...scheduled.map((t): Scanned => [t.file, t]), ...systemPrompt.map((p): Scanned => [p.file, { raw: p.text }])];
+  const scanned: Scanned[] = [[AGENT_FILE, agent], [env?.file, env], ...tools.flatMap((t): Scanned[] => [[t.file, t], ...(t.members ?? []).map((m): Scanned => [m.file, m])]), ...vaultFiles, ...skillTexts, ...channels.map((c): Scanned => [c.file, c]), ...scheduled.map((t): Scanned => [t.file, t]), ...systemPrompt.map((p): Scanned => [p.file, { raw: p.text }])];
   for (const [file, parsed] of scanned) {
     if (!parsed) continue;
     for (const [pattern, what] of SECRET_PATTERNS) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CHANNEL_TYPES, channelSettings, channelSystem, durationMs, readChannels } from "../lib/channels.ts";
+import { CHANNEL_TYPES, channelSettings, channelSystem, durationMs, maySendTo, readChannels } from "../lib/channels.ts";
 import { checkFiles } from "../lib/check.ts";
 import { agentBody } from "../lib/instance.ts";
 import { AGENT_MD, ENV_MD, COMPUTER_TOOLS_MD } from "./helpers.js";
@@ -308,10 +308,44 @@ test("a Discord agent can list channels it may post in on its own, with a limit 
   assert.deepEqual(settings.sendTo, [ID, OTHER]);
   assert.deepEqual(settings.limits, { messages_sent_per_hour: 10 });
 
-  assert.match(errorsFor(front("send_to: [announcements]"))[0], /`send_to` must be a numeric channel ID/);
+  assert.match(errorsFor(front("send_to: [announcements]"))[0], /`send_to`: "announcements" must be a numeric channel ID/);
   assert.match(errorsFor(front(`send_to: ${ID}`))[0], /`send_to` must be a list/);
-  assert.match(errorsFor('type: telegram\nallow: "*"\nsend_to: ["1"]')[0], /unknown field `send_to`/);
+  assert.match(errorsFor('type: slack\nallow: "*"\nsend_to: ["C012AB3CD"]')[0], /`send_to` isn't available on slack yet/);
+  assert.match(errorsFor(front('send_to: "*"'))[0], /isn't available on discord; list where it can send/);
+  assert.match(errorsFor(front("send_to: contacts"))[0], /`send_to: contacts` isn't available on discord/);
   assert.match(warningsFor(front("limits: {messages_sent_per_hour: 10}"))[0], /no effect without `send_to`/);
+});
+
+test("email, SMS and Telegram can send to listed places, to contacts, or, but for Telegram, anywhere", () => {
+  const sms = (sendTo) => `type: twilio\ntransport: sms\nfrom: "+14155550100"\nallow: "*"\nsend_to: ${sendTo}`;
+  assert.deepEqual(errorsFor(sms('[contacts, "+14155550123"]')), []);
+  assert.match(errorsFor(sms('["4155550123"]'))[0], /`send_to`: "4155550123" must be a phone number like \+14155550123, or contacts/);
+  assert.deepEqual(errorsFor(sms('"*"')), []);
+  assert.match(warningsFor(sms('"*"')).join("\n"), /text any number.*break US law and carrier rules/);
+  assert.match(errorsFor(sms('[contacts, "*"]'))[0], /on its own, not in a list/);
+
+  const email = (sendTo, allow = '"*"') => `type: email\nallow: ${allow}\nsend_to: ${sendTo}`;
+  assert.deepEqual(errorsFor(email('["owner@juniper.com", "*@juniper.com", contacts]')), []);
+  assert.match(errorsFor(email('["nope"]'))[0], /`send_to`: "nope" must be an email address/);
+  assert.match(warningsFor(email('"*"')).join("\n"), /send anywhere; a host should only let the owner's own conversations send/);
+  assert.deepEqual(warningsFor(email('"*"', '["owner@juniper.com"]')), []);
+
+  const telegram = (sendTo) => `type: telegram\nallow: "*"\nsend_to: ${sendTo}`;
+  assert.deepEqual(errorsFor(telegram('[contacts, "-1001234567890"]')), []);
+  assert.match(errorsFor(telegram('"*"'))[0], /isn't available on telegram; use contacts for everyone who's messaged it/);
+  assert.deepEqual(channelSettings(readChannels({ "channels/c.md": file(telegram("contacts")) }).channels[0]).sendTo, ["contacts"]);
+});
+
+test("maySendTo decides where a channel's send_to lets the agent send", () => {
+  const settings = (sendTo) => ({ sendTo });
+  assert.equal(maySendTo(settings(["*"]), "+14155550123"), true);
+  assert.equal(maySendTo(settings(["contacts"]), "+14155550123"), false);
+  assert.equal(maySendTo(settings(["contacts"]), "+14155550123", { isContact: true }), true);
+  assert.equal(maySendTo(settings(["+14155550123"]), "+14155550123"), true);
+  assert.equal(maySendTo(settings(["Owner@Juniper.com"]), "owner@juniper.COM"), true);
+  assert.equal(maySendTo(settings(["*@juniper.com"]), "sam@JUNIPER.com"), true);
+  assert.equal(maySendTo(settings(["*@juniper.com"]), "sam@notjuniper.com.evil.io"), false);
+  assert.equal(maySendTo(settings([]), "anyone@example.com", { isContact: true }), false);
 });
 
 test("only one bot can post in a channel, so it's clear which one does", () => {

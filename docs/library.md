@@ -91,7 +91,8 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 | `defaultAnswers(name)` | The answers `scaffold` uses when a question is skipped |
 | `builtInFile(names, enabled, permission)` | The computer tools' file. `permission` defaults to `auto` |
 | `mcpToolsetFile({ name, tools, permission })` | An MCP server's tool file. `permission` defaults to `always_ask` |
-| `agentbookTools(tools, toolsets)` | The agentbook tools a folder turns on, each with its effective `permission` |
+| `agentbookTools(tools, toolsets)` | The agentbook tools a folder turns on, each with its effective `permission`, the `group` its file or folder goes by, and the owner's `notes`, which its `description` ends with |
+| `agentbookToolsetFiles({ folder, toolset, note, tools })` | An agentbook toolset as a [folder](tools.md#a-toolset-as-a-folder): `toolset.md`, and a file for each of `tools`, each `{ name, permission, enabled, notes }` |
 
 ### Channels
 
@@ -101,7 +102,9 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 | `channelSystem(instance, channel)` | The system prompt for a conversation on this channel. Given only the agent, it leaves out `system_prompt/` |
 | `durationMs(value)` | `"24h"` in milliseconds, or null if it isn't a length of time |
 | `CHANNEL_TYPES` | What each type needs, including `CHANNEL_TYPES[type].secrets` |
-| `ANYONE` | `"*"`, the value of `allow` for anyone |
+| `maySendTo(settings, to, { isContact })` | Whether a channel's `send_to` lets the agent send to `to`. See [Sending on its own](channels.md#sending-on-its-own) |
+| `ANYONE` | `"*"`, the value of `allow` and `send_to` for anyone |
+| `CONTACTS` | `"contacts"`, in `send_to` for everyone who has messaged the agent on the channel |
 
 See [Channels](channels.md).
 
@@ -128,8 +131,8 @@ See [Scheduled tasks](scheduled.md).
 ### Files and constants
 
 - **Files:** `textOf`, `bytesOf`, `isIgnoredPath`, `pathsUnder`
-- **Names:** `AGENT_FILE`, `COMPUTER_FILE`, `OLD_COMPUTER_FILE` (`env.md`), `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`
-- **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `COMPUTER_TOOLS` (also exported as `PREBUILT_TOOLS`, its old name), `POLICIES`
+- **Names:** `AGENT_FILE`, `COMPUTER_FILE`, `OLD_COMPUTER_FILE` (`env.md`), `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`, `TOOLSET_FOLDER_FILE` (`toolset.md`)
+- **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `COMPUTER_TOOLS` (also exported as `PREBUILT_TOOLS`, its old name), `POLICIES`, `OWNER_NOTES`
 - **Credential types:** `MCP_OAUTH`, `ENV_VAR`, `CREDENTIAL_TYPES`, `SECRET_FIELDS`, `TOKEN_ENDPOINT_AUTH`
 - **Other:** `MODELS`, `NETWORKING`, `MAX_UPLOAD_BYTES`, `FileError`
 

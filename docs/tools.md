@@ -1,6 +1,6 @@
 # `tools/`
 
-What the agent can do. Every `.md` file under `tools/`, at any depth, is a tool file. Subfolders are only for organizing, and aren't compiled into anything. Files that aren't `.md` are ignored, so helper code can sit beside the tools that use it.
+What the agent can do. Every `.md` file under `tools/`, at any depth, is a tool file. Subfolders are only for organizing, and aren't compiled into anything, except a [toolset folder](#a-toolset-as-a-folder), whose files are one toolset's tools. Files that aren't `.md` are ignored, so helper code can sit beside the tools that use it.
 
 A file's `type` says what it is:
 
@@ -211,7 +211,7 @@ It compiles to:
 
 ## Agentbook toolsets
 
-Tools from a catalog that a host provides and runs itself, so a user can have them without writing code. The file picks which ones to turn on. `toolset` must match the file name.
+Tools from a catalog that a host provides and runs itself, so a user can have them without writing code. They can be one file with a table, or a [folder with a file for each tool](#a-toolset-as-a-folder). As one file, `toolset` must match the file name.
 
 ```markdown path=tools/google_calendar.md
 ---
@@ -243,6 +243,34 @@ checkFiles(files, { toolsets });
 ```
 
 Without a catalog, `check` warns that the file needs a host, and `deploy` refuses it. With one, an unknown toolset or tool is an error.
+
+### A toolset as a folder
+
+A folder under `tools/` with a `toolset.md` of `type: agentbook` is one toolset, and every other `.md` file in it is one of its tools, named after the file. The folder can be called anything, and `toolset` says which toolset it is.
+
+```text
+tools/messaging_tools/
+├── toolset.md           # type: agentbook, toolset: messaging
+├── list_destinations.md
+└── send_message.md
+```
+
+```markdown path=tools/messaging_tools/send_message.md
+---
+permission: always_allow
+---
+
+Only post in #gm before 10am.
+```
+
+- A tool's file has two optional fields: `enabled`, true unless it's false, and `permission`, `always_allow` or `always_ask`, which means `always_ask` when it's left out. A file can be only notes, with no fields at all.
+- A tool's file is its row: a tool without one is off, and a file whose name isn't in the catalog is an error.
+- Its body is notes for the agent. They're sent after the catalog's description, under "Notes from the agent's owner:", so the owner can say how and when to use the tool.
+- `toolset.md`'s body is a note for people, and isn't sent. It can't have a `## Tools` table, since the tools are files.
+- The folder holds its tools' files directly, without folders inside it, and a toolset can only be turned on once, as a folder or a file.
+- Warnings name a folder's tools by the folder, like `messaging_tools.send_message`.
+
+`agentbookToolsetFiles({ folder, toolset, note, tools })` writes these files, with each tool's `permission`, `enabled` and `notes`.
 
 A tool in the catalog can also have `liveAllowed: false`, if it never runs on a live agent, or `safeForAnyone: true`, if anyone at all may use it, like one that only lists where the agent can post. These only change what `check` says about [channels](channels.md#who-can-reach-what) anyone can message. Enforcing `liveAllowed` is up to the host.
 

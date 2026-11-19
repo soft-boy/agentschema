@@ -9,6 +9,8 @@ import { AGENTBOOK, type AgentbookCatalog, MCP_TOOLSET, type Tool, type ToolRow 
 // doesn't receive these messages and `run` shouldn't either. So nothing here is sent to the API.
 export const CHANNELS_DIR = "channels";
 export const ANYONE = "*";
+// In `send_to`, everyone who has messaged the agent on the channel.
+export const CONTACTS = "contacts";
 
 const DEFAULT_RESPOND_TO = ["direct", "mention"];
 const DEFAULT_EXPIRES_AFTER = "24h";
@@ -16,7 +18,7 @@ const DEFAULT_EXPIRES_AFTER = "24h";
 const EMAIL_EXPIRES_AFTER = "7d";
 const RESPOND_TO = ["direct", "mention", "reply", "all"];
 const LIMITS = ["messages_per_sender_per_hour", "messages_per_day", "messages_sent_per_hour"];
-const SHARED_FIELDS = ["type", "enabled", "allow", "respond_to", "scope", "expires_after", "approvals", "limits", "greeting"];
+const SHARED_FIELDS = ["type", "enabled", "allow", "respond_to", "scope", "expires_after", "approvals", "limits", "greeting", "send_to"];
 const MAX_GREETING = 1000;
 const MAX_SYSTEM_PROMPT = 100_000;
 
@@ -41,6 +43,9 @@ export interface ChannelType {
   hasGroups: boolean;
   expiresAfter?: string;
   allow: Check;
+  // Where the agent can send on its own, when the channel can: what each place in `send_to` must be, and
+  // whether it can be "contacts" or "*". See checkSendTo.
+  sendTo?: { place: Check; contacts: boolean; anyone: boolean };
   fields: Record<string, ChannelField>;
   identity?: (data: Frontmatter) => string | null;
 }
@@ -111,6 +116,8 @@ export const CHANNEL_TYPES: Record<string, ChannelType> = {
     approvals: ["deny", "sender"],
     hasGroups: true,
     allow: matches(/^(\d+|@[A-Za-z0-9_]{5,32})$/, "a numeric user ID or an @username"),
+    // A bot can only message a chat that has started it, so there's no one else to send to.
+    sendTo: { place: matches(/^-?\d+$/, "a numeric chat ID"), contacts: true, anyone: false },
     fields: {},
   },
   twilio: {
@@ -119,6 +126,7 @@ export const CHANNEL_TYPES: Record<string, ChannelType> = {
     approvals: ["deny", "sender"],
     hasGroups: false,
     allow: matches(PHONE, "a phone number like +14155550123"),
+    sendTo: { place: matches(PHONE, "a phone number like +14155550123"), contacts: true, anyone: true },
     fields: {
       transport: { required: true, check: oneOf("sms", "whatsapp") },
       from: { required: true, check: matches(PHONE, "a phone number like +14155550123") },
@@ -133,6 +141,7 @@ export const CHANNEL_TYPES: Record<string, ChannelType> = {
     hasGroups: false,
     expiresAfter: EMAIL_EXPIRES_AFTER,
     allow: EMAIL_ALLOW,
+    sendTo: { place: EMAIL_ALLOW, contacts: true, anyone: true },
     fields: {
       address: { required: true, check: matches(EMAIL, "an email address") },
       from_name: { check: text },
@@ -148,6 +157,7 @@ export const CHANNEL_TYPES: Record<string, ChannelType> = {
     hasGroups: false,
     expiresAfter: EMAIL_EXPIRES_AFTER,
     allow: EMAIL_ALLOW,
+    sendTo: { place: EMAIL_ALLOW, contacts: true, anyone: true },
     fields: {
       address: { check: matches(EMAIL, "an email address") },
       from_name: { check: text },
@@ -170,13 +180,13 @@ export const CHANNEL_TYPES: Record<string, ChannelType> = {
     approvals: ["deny", "sender"],
     hasGroups: true,
     allow: matches(DISCORD_ID, "a numeric user ID"),
+    sendTo: { place: matches(DISCORD_ID, "a numeric channel ID"), contacts: false, anyone: false },
     fields: {
       application_id: { required: true, check: matches(DISCORD_ID, "a numeric application ID") },
       public_key: { required: true, check: matches(/^[0-9a-f]{64}$/, "the 64-character public key") },
       guilds: { check: listOf(matches(DISCORD_ID, "a numeric server ID")) },
       channels: { check: listOf(matches(DISCORD_ID, "a numeric channel ID")) },
       dedicated_channels: { check: listOf(matches(DISCORD_ID, "a numeric channel ID")) },
-      send_to: { check: listOf(matches(DISCORD_ID, "a numeric channel ID")) },
       command: { check: matches(/^[a-z0-9_-]{1,32}$/, "a slash command's name, like ask") },
     },
     identity: ({ application_id: id }) => id,
@@ -239,6 +249,7 @@ export function checkChannels(
 
     checkAllow(data, type, err, warn);
     checkShared(data, type, err, warn);
+    checkSendTo(data, type, err, warn);
     for (const [field, { required, check }] of Object.entries(type.fields)) {
       if (data[field] === undefined) {
         if (required) err(`\`${field}\` is required`);
@@ -265,7 +276,8 @@ export function checkChannels(
       else identities.set(identity, channel.file);
     }
 
-    if (Array.isArray(data.send_to)) {
+    // A Discord channel can only be in one file's `send_to`. An address or number can be in several.
+    if (data.type === "discord" && Array.isArray(data.send_to)) {
       for (const place of data.send_to) {
         if (typeof place !== "string") continue;
         if (postedTo.has(place)) err(`\`send_to\`: ${place} is already in ${postedTo.get(place)}, and only one bot can post there`);
@@ -293,6 +305,36 @@ function checkAllow({ allow, approvals }: Frontmatter, type: ChannelType, err: R
     const problem = type.allow(entry);
     if (problem) err(`\`allow\`: ${JSON.stringify(entry)} ${problem}`);
     else if (typeof entry === "string" && entry.startsWith("@")) warn(`\`allow\`: ${entry} can change hands, because Telegram usernames can be given up and reclaimed; a numeric user ID is safer`);
+  }
+}
+
+// `send_to`: where the agent may send on its own, through a host's tool. A list of places, which can
+// include "contacts", for everyone who has messaged the agent on the channel, or "*" for anywhere, alone.
+// Email takes "*@" and a domain, for anyone there.
+function checkSendTo({ send_to: sendTo, type: name, allow }: Frontmatter, type: ChannelType, err: Report, warn: Report): void {
+  if (sendTo === undefined) return;
+  if (!type.sendTo) return err(`\`send_to\` isn't available on ${name} yet`);
+  const { place, contacts, anyone } = type.sendTo;
+  if (sendTo === ANYONE || sendTo === CONTACTS) {
+    if (sendTo === ANYONE && !anyone) return err(`\`send_to: "${ANYONE}"\` isn't available on ${name}${contacts ? `; use ${CONTACTS} for everyone who's messaged it` : "; list where it can send"}`);
+    if (sendTo === CONTACTS && !contacts) return err(`\`send_to: ${CONTACTS}\` isn't available on ${name}; list where it can send`);
+  } else if (!Array.isArray(sendTo)) {
+    return err(`\`send_to\` must be a list of where it can send${anyone ? `, or "${ANYONE}"` : ""}`);
+  } else {
+    for (const entry of sendTo) {
+      if (entry === ANYONE) return err(anyone ? `write \`send_to: "${ANYONE}"\` on its own, not in a list` : `\`send_to\` can't be "${ANYONE}" on ${name}`);
+      if (entry === CONTACTS) {
+        if (!contacts) err(`\`send_to\`: ${CONTACTS} isn't available on ${name}`);
+        continue;
+      }
+      const problem = place(entry);
+      if (problem) err(`\`send_to\`: ${JSON.stringify(entry)} ${problem}${contacts ? `, or ${CONTACTS}` : ""}`);
+    }
+  }
+  if (sendTo === ANYONE && name === "twilio") {
+    warn(`\`send_to: "${ANYONE}"\` lets the agent text any number. Texting people who haven't agreed to hear from you can break US law and carrier rules, so ${CONTACTS} or a list is safer`);
+  } else if (sendTo === ANYONE && allow === ANYONE) {
+    warn(`anyone can message this channel, and \`send_to: "${ANYONE}"\` lets the agent send anywhere; a host should only let the owner's own conversations send to places that aren't listed`);
   }
 }
 
@@ -385,13 +427,26 @@ export function channelSettings({ data }: Pick<Channel, "data">): ChannelSetting
     allow: data.allow,
     respondTo: data.respond_to ?? DEFAULT_RESPOND_TO,
     dedicatedChannels: data.dedicated_channels ?? [],
-    sendTo: data.send_to ?? [],
+    sendTo: data.send_to === undefined ? [] : Array.isArray(data.send_to) ? data.send_to : [data.send_to],
     scope: data.scope ?? type.scopes[0],
     expiresAfterMs: durationMs(data.expires_after ?? type.expiresAfter ?? DEFAULT_EXPIRES_AFTER),
     approvals: data.approvals ?? "deny",
     limits: data.limits ?? {},
     greeting: data.greeting ?? null,
   };
+}
+
+// Whether a channel's `send_to` lets the agent send to `to`, given whether `to` has messaged the agent
+// on that channel before. Email addresses are compared without regard to case.
+export function maySendTo({ sendTo }: Pick<ChannelSettings, "sendTo">, to: string, { isContact = false }: { isContact?: boolean } = {}): boolean {
+  if (sendTo.includes(ANYONE)) return true;
+  if (isContact && sendTo.includes(CONTACTS)) return true;
+  const address = to.toLowerCase();
+  return sendTo.some((place) => {
+    if (place === CONTACTS || place === ANYONE) return false;
+    if (place.startsWith("*@")) return address.endsWith(place.slice(1).toLowerCase());
+    return place.includes("@") ? place.toLowerCase() === address : place === to;
+  });
 }
 
 // The system prompt for a conversation on this channel: the agent's, then the channel's own instructions.

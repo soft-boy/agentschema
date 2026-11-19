@@ -155,6 +155,58 @@ test("agentbook tool files are checked", () => {
   assert.match(clash.errors.join("\n"), /another tool is already named `create_booking`/);
 });
 
+test("an agentbook toolset can be a folder, with a file for each tool, whose notes the agent gets", () => {
+  const options = { toolsets: CATALOG, customTools: false };
+  const files = lib.agentbookToolsetFiles({
+    folder: "calendar_tools",
+    toolset: "google_calendar",
+    note: "Booking on the shop's calendar.",
+    tools: [
+      { name: "check_availability", permission: "always_allow" },
+      { name: "create_booking", permission: "always_ask", notes: "Only book weekdays." },
+      { name: "delete_event", enabled: false },
+    ],
+  });
+  assert.deepEqual(Object.keys(files), ["tools/calendar_tools/toolset.md", "tools/calendar_tools/check_availability.md", "tools/calendar_tools/create_booking.md", "tools/calendar_tools/delete_event.md"]);
+  assert.equal(files["tools/calendar_tools/create_booking.md"], "---\npermission: always_ask\n---\n\nOnly book weekdays.\n");
+
+  const { errors, warnings, instance: inst } = checkFiles({ ...BASE, ...files }, options);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(
+    agentbookTools(inst.tools, CATALOG).map((t) => [t.name, t.permission, t.group, t.file]),
+    [
+      ["check_availability", "always_allow", "calendar_tools", "tools/calendar_tools/check_availability.md"],
+      ["create_booking", "always_ask", "calendar_tools", "tools/calendar_tools/create_booking.md"],
+    ],
+  );
+  const booking = agentBody(inst, [], options).tools.find((t) => t.name === "create_booking");
+  assert.equal(booking.description, `Book a time.\n\n${lib.OWNER_NOTES}\nOnly book weekdays.`);
+
+  // A tool's file can be only notes, which leaves it on and asking first.
+  const notesOnly = checkFiles({ ...BASE, ...files, "tools/calendar_tools/delete_event.md": "Never delete anything.\n" }, options);
+  assert.deepEqual(notesOnly.errors, []);
+  assert.deepEqual(agentbookTools(notesOnly.instance.tools, CATALOG).find((t) => t.name === "delete_event").permission, "always_ask");
+
+  // The folder's scheduled-run and channel warnings name the tools by the folder.
+  const scheduled = checkFiles({ ...BASE, ...files, "scheduled/gm.md": "---\nschedule: \"0 9 * * *\"\ntimezone: UTC\n---\n\nHi.\n" }, options);
+  assert.match(scheduled.warnings.join("\n"), /calendar_tools\.check_availability, calendar_tools\.create_booking/);
+});
+
+test("a toolset folder's files are checked", () => {
+  const options = { toolsets: CATALOG, customTools: false };
+  const base = lib.agentbookToolsetFiles({ folder: "calendar_tools", toolset: "google_calendar", tools: [{ name: "check_availability", permission: "always_allow" }] });
+  const errs = (changes) => checkFiles({ ...BASE, ...base, ...changes }, options).errors.join("\n");
+  assert.match(errs({ "tools/calendar_tools/send_email.md": "Hi.\n" }), /tools\/calendar_tools\/send_email\.md: `send_email` is not a tool in `google_calendar`/);
+  assert.match(errs({ "tools/calendar_tools/create_booking.md": "---\npermission: auto\n---\n" }), /create_booking\.md: `permission` must be always_allow or always_ask/);
+  assert.match(errs({ "tools/calendar_tools/create_booking.md": "---\nenabled: yes please\n---\n" }), /create_booking\.md: `enabled` must be true or false/);
+  assert.match(errs({ "tools/calendar_tools/create_booking.md": "---\ncolor: red\n---\n" }), /create_booking\.md: unknown field `color`/);
+  assert.match(errs({ "tools/calendar_tools/more/create_booking.md": "Hi.\n" }), /without folders inside it/);
+  assert.match(errs({ "tools/calendar_tools/toolset.md": "---\ntype: agentbook\ntoolset: google_calendar\n---\n\n## Tools\n\n| Name | Enabled |\n|---|---|\n| `check_availability` | `true` |\n" }), /not as a `## Tools` table/);
+  // The same toolset can't be turned on twice, as a folder and as a file.
+  assert.match(errs({ "tools/google_calendar.md": CALENDAR_MD }), /more than one file turns on the agentbook toolset `google_calendar`/);
+});
+
 test("the CLI warns about agentbook tools at check, and refuses them at deploy", async () => {
   const dir = instance({ ...BASE, "tools/google_calendar.md": CALENDAR_MD });
   const { errors, warnings } = check(dir);

@@ -78,7 +78,7 @@ A number followed by `m`, `h` or `d`, like `30m`, `24h` or `7d`.
 |---|---|
 | `messages_per_sender_per_hour` | How much one person can send |
 | `messages_per_day` | How much the whole channel can receive |
-| `messages_sent_per_hour` | How many messages the agent can post through [`send_to`](#posting-on-its-own) |
+| `messages_sent_per_hour` | How many messages the agent can post through [`send_to`](#sending-on-its-own) |
 
 Each is a whole number above 0. Every message is paid for by the agent's owner, so a public channel should have limits, and a host should enforce its own as well.
 
@@ -218,7 +218,7 @@ You're answering a slash command on Discord, so keep it under 2,000 characters.
 | **`guilds`** | The server IDs it may reply in |
 | **`channels`** | The channel IDs it may answer mentions and replies in, within those servers |
 | **`dedicated_channels`** | Channels it has to itself. See below |
-| **`send_to`** | Channels it may post in on its own. See [Posting on its own](#posting-on-its-own) |
+| **`send_to`** | Channels it may post in on its own. See [Posting on its own](#sending-on-its-own) |
 | **`command`** | The slash command's name, like `ask` |
 | **`allow`** | Numeric user IDs in quotes |
 | **Secrets** | `bot_token` |
@@ -240,9 +240,9 @@ You're on Discord, and one channel there is your own, so everyone in it is talki
 
 To answer only in those channels, and nowhere else, write `respond_to: []`. `channels` doesn't limit dedicated channels. Reading every message in a channel needs Discord's Message Content Intent, which is on the bot's page in the Developer Portal. Without it, Discord only shows a bot the messages that mention it.
 
-## Posting on its own
+## Sending on its own
 
-An agent normally only answers. `send_to` lists the places it may also post in on its own, such as an announcements channel. It's on Discord, where it lists channel IDs:
+An agent normally only answers. `send_to` says where it may also send on its own, such as an announcements channel on Discord, an email to the owner, or a text to a customer who wrote in earlier:
 
 ```markdown path=channels/server.md
 ---
@@ -256,7 +256,20 @@ allow: "*"
 ---
 ```
 
-The list does nothing by itself. The host gives the agent a tool that posts, such as Agentbook's `messaging` toolset, and the list is what that tool is limited to. A place can only be in one file's `send_to`, so it's clear which bot posts there. The bot needs to be in that server, with permission to see the channel and send messages there, but it doesn't need the Message Content Intent.
+It's a list of places, in the form the channel uses:
+
+| Channel | A place | `contacts` | `"*"` |
+|---|---|---|---|
+| `discord` | A channel ID | No | No |
+| `telegram` | A chat ID, negative for a group | Yes | No: a bot can only message chats that have started it |
+| `twilio` | A phone number like `+14155550123` | Yes | Yes, with a warning |
+| `email`, `sendgrid` | An email address, or `*@` and a domain for anyone there | Yes | Yes |
+
+- **`contacts`** is everyone who has messaged the agent on the channel, which the host knows and the file doesn't. It can be mixed with places: `send_to: [contacts, "owner@example.com"]`.
+- **`"*"`** is anywhere, on its own rather than in a list. On `twilio`, `check` warns that texting people who haven't agreed to it can break US law and carrier rules. Elsewhere, it warns when anyone can message the channel too.
+- `maySendTo(channelSettings(channel), to, { isContact })` says whether a place is allowed, so that every host decides the same way. Email addresses are compared without regard to case.
+
+The list does nothing by itself. The host gives the agent a tool that sends, such as Agentbook's `messaging` toolset, and the list is what that tool is limited to. A Discord channel can only be in one file's `send_to`, so it's clear which bot posts there. The bot needs to be in that server, with permission to see the channel and send messages there, but it doesn't need the Message Content Intent.
 
 ## Secrets
 
@@ -273,7 +286,7 @@ channels/telegram.md: anyone can message this channel, and these tools can run
 without asking, through your sign-ins and connections: bank.pay, calendar.book
 ```
 
-That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Computer tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent, and nor does one with `safeForAnyone: true`, such as one that only lists where the agent can post. A tool that posts through `send_to` does count, because anyone could have it post in those channels.
+That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Computer tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent, and nor does one with `safeForAnyone: true`, such as one that only lists where the agent can post. A tool that sends through `send_to` does count, because anyone could have it send to those places.
 
 ## Other rules
 
@@ -294,6 +307,7 @@ Read a channel with `readChannels(files)`, and get its behavior with `channelSet
 - Treat a channel like a public page: run the deployed version, on the same copy of the agent, and enforce your own limits.
 - Acknowledge a provider's webhook quickly and do the work afterwards, because providers retry, and a retry shouldn't start a second reply.
 - Verify each provider's signature on incoming messages before trusting them. For email, also check the sender passed DKIM or DMARC, or someone can write as anyone, and the agent replies to whoever they named.
-- Post only in the places a channel's `send_to` lists, and only while the channel is enabled. Turn mentions off, so that an agent can't be talked into pinging everyone.
+- Send only where a channel's `send_to` allows, and only while the channel is enabled. Turn mentions off, so that an agent can't be talked into pinging everyone.
+- In a conversation someone other than the owner started, such as on a channel anyone can message, send only to places `send_to` lists by name, never to `contacts` or `"*"`, and don't show the agent who its contacts are. Otherwise a stranger could have the agent message, or tell them about, anyone it knows.
 - Visitors should only see the agent's words, not tool calls or error details.
 - Check each provider's own docs when you build for it. Each has its own rules on setup, message length and sign-up, such as registering to send SMS in the US, or receiving email on a subdomain.

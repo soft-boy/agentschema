@@ -7,6 +7,8 @@ export const TOOLSET = "agent_toolset_20260401";
 export const TOOLSET_FILE = `${TOOLSET}.md`;
 export const MCP_TOOLSET = "mcp_toolset";
 export const AGENTBOOK = "agentbook";
+// A folder of an agentbook toolset's tools has this file, saying which toolset it is.
+export const TOOLSET_FOLDER_FILE = "toolset.md";
 // The tools Claude runs on the agent's computer, its container, which computer.md describes.
 export const COMPUTER_TOOLS = ["bash", "edit", "glob", "grep", "read", "web_fetch", "web_search", "write"];
 /** @deprecated Their old name: use COMPUTER_TOOLS. */
@@ -32,6 +34,13 @@ export interface ToolRow {
   permission?: string;
 }
 
+// One tool's file in a toolset folder: on or off, its permission, and in its body, notes for the
+// agent about using it.
+export interface ToolMember extends MarkdownFile {
+  file: string;
+  name: string;
+}
+
 // A custom tool's `## Code` block.
 export interface ToolCode {
   lang: string;
@@ -46,6 +55,9 @@ export interface Tool extends MarkdownFile {
   params: ToolParam[] | null;
   code: ToolCode | null;
   rows: ToolRow[] | null;
+  // For a toolset folder, its tools' files. `file` is then the folder's toolset.md, `name` is the folder's
+  // name, and `rows` is made from these, so everything that reads a toolset's table reads a folder too.
+  members?: ToolMember[];
   // Where the file is on disk, which the CLI adds so a custom tool's require() calls resolve from there.
   path?: string;
 }
@@ -70,10 +82,15 @@ export interface AgentbookToolDefinition {
 export type AgentbookCatalog = Record<string, { tools: AgentbookToolDefinition[] }>;
 
 // A tool that a `type: agentbook` file turns on: the catalog's definition, and where it came from.
+// `file` is the tool's own file in a toolset folder, or else the toolset's file, and `group` is what the
+// toolset goes by in the folder: its file's name, or its folder's. `notes` is what the owner wrote for
+// the agent in the tool's file, which `description` ends with.
 export interface AgentbookTool extends AgentbookToolDefinition {
   file: string;
+  group: string;
   toolset: string;
   permission: string;
+  notes: string;
 }
 
 export interface CompileOptions {
@@ -141,21 +158,73 @@ export function readTools(files: FileMap): ReadToolsResult {
 
   const tools: Tool[] = [];
   const errors: string[] = [];
-  for (const file of pathsUnder(files, TOOLS_DIR).filter((path) => path.endsWith(".md"))) {
+  const parse = (file: string) => {
     try {
-      const parsed = parseMarkdown(textOf(files[file]), file);
-      const name = file.slice(file.lastIndexOf("/") + 1, -".md".length);
-      tools.push({ file, name, ...parsed, ...parseSections(parsed.body, file) });
+      return parseMarkdown(textOf(files[file]), file);
     } catch (err) {
       if (!(err instanceof FileError)) throw err;
       errors.push(err.message);
+      return null;
     }
+  };
+  // A tool file, with its tables and code. A table that can't be read is an error too.
+  const asTool = (file: string, name: string, parsed: MarkdownFile, extra: Partial<Tool> = {}): Tool | null => {
+    try {
+      return { file, name, ...parsed, ...parseSections(parsed.body, file), ...extra };
+    } catch (err) {
+      if (!(err instanceof FileError)) throw err;
+      errors.push(err.message);
+      return null;
+    }
+  };
+  const paths = pathsUnder(files, TOOLS_DIR).filter((path) => path.endsWith(".md"));
+  const folderOf = (path: string) => path.slice(0, path.lastIndexOf("/"));
+  const nameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/, "");
+
+  // A folder with a toolset.md of `type: agentbook` is one toolset, and every other file in it is one of
+  // its tools. tools/ itself can't be one, since its files are tools of every kind.
+  const folders = new Set<string>();
+  for (const path of paths) {
+    if (!path.endsWith(`/${TOOLSET_FOLDER_FILE}`) || folderOf(path) === TOOLS_DIR) continue;
+    const parsed = parse(path);
+    if (!parsed || parsed.data.type !== AGENTBOOK) continue;
+    const folder = folderOf(path);
+    folders.add(folder);
+    const members: ToolMember[] = [];
+    for (const file of paths) {
+      if (file === path || !file.startsWith(`${folder}/`)) continue;
+      if (folderOf(file) !== folder) {
+        errors.push(`${file}: a toolset's folder holds its tools' files directly, without folders inside it`);
+        continue;
+      }
+      // A tool's file can be only notes, without properties.
+      const text = textOf(files[file]).replace(/^\uFEFF/, "");
+      const member = /^---\r?\n/.test(text) ? parse(file) : { data: {}, body: text.trim(), raw: text };
+      if (member) members.push({ file, name: nameOf(file), ...member });
+    }
+    members.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    const rows = members.map(({ name, data }) => ({ name, enabled: data.enabled === false ? "false" : "true", permission: typeof data.permission === "string" ? data.permission : "" }));
+    const tool = asTool(path, nameOf(folder), parsed, { rows, members });
+    if (tool) tools.push(tool);
+  }
+
+  const inFolder = (path: string) => [...folders].some((folder) => path.startsWith(`${folder}/`));
+  for (const file of paths) {
+    if (inFolder(file)) continue;
+    const parsed = parse(file);
+    const tool = parsed && asTool(file, nameOf(file), parsed);
+    if (tool) tools.push(tool);
   }
 
   // Names must be unique across folders, since the folders are dropped.
   for (const [type, what] of [["custom", "tool"], [MCP_TOOLSET, "MCP server"], [AGENTBOOK, "agentbook toolset"]]) {
     for (const [name, same] of groupBy(tools.filter((t) => t.data.type === type), (t) => t.name)) {
       if (same.length > 1) errors.push(`${TOOLS_DIR}: more than one ${what} is named \`${name}\` (${same.map((t) => t.file).join(", ")})`);
+    }
+  }
+  for (const [toolset, same] of groupBy(tools.filter((t) => t.data.type === AGENTBOOK && typeof t.data.toolset === "string"), (t) => t.data.toolset as string)) {
+    if (same.length > 1 && new Set(same.map((t) => t.name)).size > 1) {
+      errors.push(`${TOOLS_DIR}: more than one file turns on the agentbook toolset \`${toolset}\` (${same.map((t) => t.file).join(", ")})`);
     }
   }
   const toolsets = tools.filter((t) => t.data.type === TOOLSET);
@@ -266,7 +335,7 @@ export function checkTools(tools: Tool[], errors: string[], warnings: string[] =
       else checkCustom(tool, err);
       extra(["type", "name", "description"]);
     } else if (type === AGENTBOOK) {
-      checkAgentbook(tool, err, (msg) => warnings.push(`${tool.file}: ${msg}`), options);
+      checkAgentbook(tool, err, (msg) => warnings.push(`${tool.file}: ${msg}`), options, (file, msg) => errors.push(`${file}: ${msg}`));
       extra(["type", "toolset"]);
     } else {
       err(`\`type\` must be \`${TOOLSET}\` (the computer tools), \`${MCP_TOOLSET}\` (an MCP server), \`custom\` or \`${AGENTBOOK}\``);
@@ -301,16 +370,36 @@ function checkMcpToolset(tool: Tool, err: Report): void {
 
 // A toolset from agentbook's catalog. `## Tools` turns its tools on one by one, so a tool without
 // a row is off: a new tool in the catalog never reaches a deployed agent by itself.
-function checkAgentbook(tool: Tool, err: Report, warn: Report, { toolsets }: CheckToolsOptions): void {
+//
+// It's either one file with a `## Tools` table, named after the toolset, or a folder: a toolset.md, and a
+// file for each tool, named after it, whose body is notes for the agent. A tool without a row, or a
+// file, is off.
+function checkAgentbook(tool: Tool, err: Report, warn: Report, { toolsets }: CheckToolsOptions, errAt: (file: string, msg: string) => void): void {
   const { toolset } = tool.data;
   if (typeof toolset !== "string" || toolset === "") return err("`toolset` is required");
-  if (toolset !== tool.name) err(`\`toolset\` must match the file name (${tool.name})`);
-  if (!tool.rows) err("a `## Tools` table listing the tools to enable is required");
+  if (tool.members) {
+    const hasTable = /^##\s+tools\s*$/im.test(tool.body);
+    if (hasTable) err("a toolset's folder lists its tools as files beside this one, not as a `## Tools` table");
+  } else {
+    if (toolset !== tool.name) err(`\`toolset\` must match the file name (${tool.name})`);
+    if (!tool.rows) err("a `## Tools` table listing the tools to enable is required");
+  }
 
   if (!toolsets) warn("this toolset runs on agentbook, so `agentschema deploy` can't deploy it");
   else if (!Object.hasOwn(toolsets, toolset)) err(`\`${toolset}\` isn't an agentbook toolset; use ${Object.keys(toolsets).join(", ")}`);
   const known = toolsets && Object.hasOwn(toolsets, toolset) ? toolsets[toolset].tools.map((t) => t.name) : null;
-  checkRows(tool.rows ?? [], err, { known, what: `a tool in \`${toolset}\``, policies: AGENTBOOK_POLICIES });
+  if (!tool.members) return checkRows(tool.rows ?? [], err, { known, what: `a tool in \`${toolset}\``, policies: AGENTBOOK_POLICIES });
+
+  for (const member of tool.members) {
+    const memberErr = (msg: string) => errAt(member.file, msg);
+    if (known && !known.includes(member.name)) memberErr(`\`${member.name}\` is not a tool in \`${toolset}\`; use ${known.join(", ")}`);
+    const { enabled, permission } = member.data;
+    if (enabled !== undefined && typeof enabled !== "boolean") memberErr("`enabled` must be true or false");
+    if (permission !== undefined && permission !== null && !AGENTBOOK_POLICIES.includes(permission)) {
+      memberErr(`\`permission\` must be ${AGENTBOOK_POLICIES.join(" or ")}, or left out`);
+    }
+    for (const key of Object.keys(member.data)) if (!["enabled", "permission"].includes(key)) memberErr(`unknown field \`${key}\``);
+  }
 }
 
 function checkToolset(tool: Tool, err: Report): void {
@@ -384,9 +473,10 @@ export function mcpToolsetFile({ name, tools = [], permission = "always_ask" }: 
   return `---\n${stringify(front)}---\n\nEvery tool the server offers is on. Its tools get listed here once it's been signed in to.\n`;
 }
 
-// The agentbook tools a folder turns on, as { file, toolset, name, description, input_schema,
-// permission }. `toolsets` is the catalog, { [toolset]: { tools: [{ name, description, input_schema }] } }.
-// A blank permission means `always_ask`, the safe choice for a tool with no policy of its own.
+// The agentbook tools a folder turns on, as { file, group, toolset, name, description, input_schema,
+// permission, notes }. `toolsets` is the catalog, { [toolset]: { tools: [{ name, description,
+// input_schema }] } }. A blank permission means `always_ask`, the safe choice for a tool with no policy of
+// its own. A tool's own file in a toolset folder can add notes, which follow the catalog's description.
 export function agentbookTools(tools: Tool[], toolsets: AgentbookCatalog = {}): AgentbookTool[] {
   return byName(tools.filter((t) => t.data.type === AGENTBOOK)).flatMap((tool) => {
     const { toolset } = tool.data;
@@ -394,9 +484,30 @@ export function agentbookTools(tools: Tool[], toolsets: AgentbookCatalog = {}): 
     return toolsets[toolset].tools.flatMap((definition) => {
       const row = tool.rows?.find((r) => r.name === definition.name);
       if (row?.enabled.toLowerCase() !== "true") return [];
-      return [{ ...definition, file: tool.file, toolset, permission: row.permission || "always_ask" }];
+      const member = tool.members?.find((m) => m.name === definition.name);
+      const notes = member?.body.trim() ?? "";
+      const description = notes ? `${definition.description}\n\n${OWNER_NOTES}\n${notes}` : definition.description;
+      return [{ ...definition, description, file: member?.file ?? tool.file, group: tool.name, toolset, permission: row.permission || "always_ask", notes }];
     });
   });
+}
+
+// What comes before a tool's notes from its file, in the description the agent gets.
+export const OWNER_NOTES = "Notes from the agent's owner:";
+
+// The files of an agentbook toolset as a folder: tools/<folder>/toolset.md, saying which toolset, with
+// `note` for people in its body, and a file for each tool in `tools`, with its permission and notes.
+export function agentbookToolsetFiles({ folder, toolset, note = "", tools }: { folder: string; toolset: string; note?: string; tools: { name: string; permission?: string; enabled?: boolean; notes?: string }[] }): FileMap {
+  const dir = `${TOOLS_DIR}/${folder}`;
+  const files: FileMap = { [`${dir}/${TOOLSET_FOLDER_FILE}`]: `---\n${stringify({ type: AGENTBOOK, toolset })}---\n${note ? `\n${note.trim()}\n` : ""}` };
+  for (const { name, permission, enabled, notes = "" } of tools) {
+    const front: Frontmatter = {};
+    if (enabled === false) front.enabled = false;
+    if (permission) front.permission = permission;
+    const head = Object.keys(front).length > 0 ? `---\n${stringify(front)}---\n` : "";
+    files[`${dir}/${name}.md`] = `${head}${notes ? `${head ? "\n" : ""}${notes.trim()}\n` : ""}`;
+  }
+  return files;
 }
 
 // The tools list sent to the API, each kind sorted by name: the computer toolset with a config

@@ -1,6 +1,6 @@
 // The browser-safe core of agentschema: no Node APIs, and `yaml` as the only dependency. It works
 // on file maps (see files.js), so it doesn't care whether an agent lives on disk or in a database.
-export { ANYONE, CHANNELS_DIR, CHANNEL_TYPES, channelSettings, channelSystem, durationMs, readChannels } from "./channels.ts";
+export { ANYONE, CHANNELS_DIR, CHANNEL_TYPES, CONTACTS, channelSettings, channelSystem, durationMs, maySendTo, readChannels } from "./channels.ts";
 export { checkFiles } from "./check.ts";
 export { bytesOf, isIgnoredPath, pathsUnder, textOf } from "./files.ts";
 export {
@@ -13,8 +13,8 @@ export { SYSTEM_PROMPT_DIR, readSystemPrompt, systemPromptOf } from "./system-pr
 export { MAX_UPLOAD_BYTES, SKILLS_DIR, SKILL_FILE, readSkills, skillKey, skillRefs } from "./skills.ts";
 export { agentMessageText, textStream } from "./stream.ts";
 export {
-  AGENTBOOK, MCP_TOOLSET, POLICIES, COMPUTER_TOOLS, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR,
-  agentbookTools, compileTools, mcpToolsetFile, readTools,
+  AGENTBOOK, MCP_TOOLSET, OWNER_NOTES, POLICIES, COMPUTER_TOOLS, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLSET_FOLDER_FILE, TOOLS_DIR,
+  agentbookTools, agentbookToolsetFiles, compileTools, mcpToolsetFile, readTools,
 } from "./tools.ts";
 export {
   CREDENTIAL_TYPES, ENV_VAR, MCP_OAUTH, SECRET_FIELDS, TOKEN_ENDPOINT_AUTH, VAULTS_DIR, VAULT_FILE,
@@ -36,7 +36,7 @@ export type { AgentMessageEvent, ContentBlock, StreamEvent, TextStream } from ".
 export type { ReadSystemPromptResult, SystemPromptPart } from "./system-prompt.ts";
 export type {
   AgentbookCatalog, AgentbookTool, AgentbookToolDefinition, CheckToolsOptions, CompileOptions, CompiledTool,
-  InputSchema, JsonSchema, ReadToolsResult, Tool, ToolCode, ToolParam, ToolRow,
+  InputSchema, JsonSchema, ReadToolsResult, Tool, ToolCode, ToolMember, ToolParam, ToolRow,
 } from "./tools.ts";
 export type {
   Credential, CredentialSecrets, CredentialSettings, ReadVaultsResult, SecretsNeeded, Vault, VaultBody,

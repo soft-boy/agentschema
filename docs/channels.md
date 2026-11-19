@@ -273,7 +273,7 @@ channels/telegram.md: anyone can message this channel, and these tools can run
 without asking, through your sign-ins and connections: bank.pay, calendar.book
 ```
 
-That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Pre-built tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent, and nor does one with `safeForAnyone: true`, such as one that only lists where the agent can post. A tool that posts through `send_to` does count, because anyone could have it post in those channels.
+That means MCP tools set to `always_allow` or `auto`, and agentbook tools set to `always_allow`. Computer tools don't count, because they run in the session's own container. A host's tool with `liveAllowed: false` doesn't count either, because channels run on the live agent, and nor does one with `safeForAnyone: true`, such as one that only lists where the agent can post. A tool that posts through `send_to` does count, because anyone could have it post in those channels.
 
 ## Other rules
 

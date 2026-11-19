@@ -14,7 +14,7 @@ my-agent/
 ├── system_prompt/
 │   └── rules.md                      # more of the system prompt
 ├── tools/
-│   ├── agent_toolset_20260401.md     # the pre-built tools to enable
+│   ├── agent_toolset_20260401.md     # the computer tools to enable
 │   └── get_weather.md                # a custom tool
 ├── skills/
 │   └── code-review/
@@ -100,7 +100,7 @@ The computer the agent runs on. The frontmatter uses the fields of a [Managed Ag
 
 Every `.md` file under `tools/`, at any depth, is a tool file, and subfolders are only for organizing. `agentschema tools create` writes any of the three kinds.
 
-**Pre-built tools** run in the agent's container. One file lists them, with a Permission of `always_allow`, `always_ask` or `auto`:
+**Computer tools** run in the agent's container. One file lists them, with a Permission of `always_allow`, `always_ask` or `auto`:
 
 ```markdown
 ---
@@ -207,7 +207,7 @@ agentschema deploy [dir]              # create or update the agent and everythin
 agentschema run [dir]                 # chat with the deployed agent in the terminal
 agentschema list                      # list the agents in your workspace
 agentschema delete <agent_id>         # archive an agent
-agentschema tools create [dir]        # add pre-built tools, a custom tool or an MCP server
+agentschema tools create [dir]        # add computer tools, a custom tool or an MCP server
 agentschema sessions list             # list the sessions in your workspace
 agentschema sessions delete <id>      # delete a session
 agentschema cred create [dir]         # add a credential to a vault, asking a few questions

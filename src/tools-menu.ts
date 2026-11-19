@@ -11,9 +11,9 @@ import { builtInFile } from "../lib/scaffold.ts";
 import { updateFrontmatter } from "./folder.ts";
 import { listMcpTools } from "./mcp.ts";
 import type { Prompts } from "./prompts.ts";
-import { MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR, mcpToolsetFile } from "../lib/tools.ts";
+import { MCP_TOOLSET, POLICIES, COMPUTER_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR, mcpToolsetFile } from "../lib/tools.ts";
 
-const PREBUILT = "Pre-built tools (bash, files, web search)";
+const COMPUTER = "Computer tools (bash, files, web search)";
 const CUSTOM = "Custom tool (JavaScript that runs on your machine)";
 const MCP = "MCP server";
 const INPUT_TYPES = ["string", "number", "integer", "boolean", "object", "string[]", "number[]", "integer[]", "boolean[]", "object[]"];
@@ -51,8 +51,8 @@ export async function toolsCreate(dir = ".", { io, fetch = globalThis.fetch, log
   const { errors, instance } = check(dir);
   if (!instance) throw new DeployError(`${dir} isn't an agent folder:\n  ${errors.join("\n  ")}`);
 
-  const kind = await io.select("What kind of tool?", [PREBUILT, CUSTOM, MCP], PREBUILT);
-  const write: ToolWriter = kind === PREBUILT ? prebuilt : kind === CUSTOM ? custom : mcp;
+  const kind = await io.select("What kind of tool?", [COMPUTER, CUSTOM, MCP], COMPUTER);
+  const write: ToolWriter = kind === COMPUTER ? computerTools : kind === CUSTOM ? custom : mcp;
   const { path, text, addServer } = await write(dir, instance, io, { fetch, log });
 
   const file = join(dir, path);
@@ -77,17 +77,17 @@ export async function toolsCreate(dir = ".", { io, fetch = globalThis.fetch, log
   return file;
 }
 
-// The pre-built toolset: one file, with a row for each tool.
-async function prebuilt(dir: string, { tools }: Instance, io: Prompts): Promise<ToolFile> {
+// The computer toolset: one file, with a row for each tool.
+async function computerTools(dir: string, { tools }: Instance, io: Prompts): Promise<ToolFile> {
   const existing = tools.find((t) => t.data.type === TOOLSET);
-  if (existing) throw new DeployError(`the agent already has its pre-built tools in ${existing.file}; edit that file's table to turn tools on or off`);
+  if (existing) throw new DeployError(`the agent already has its computer tools in ${existing.file}; edit that file's table to turn tools on or off`);
 
-  let enabled: string[] = PREBUILT_TOOLS;
-  if (!(await io.confirm(`Turn on all eight (${PREBUILT_TOOLS.join(", ")})?`, true))) {
+  let enabled: string[] = COMPUTER_TOOLS;
+  if (!(await io.confirm(`Turn on all eight (${COMPUTER_TOOLS.join(", ")})?`, true))) {
     enabled = [];
-    for (const name of PREBUILT_TOOLS) if (await io.confirm(`  ${name}?`, true)) enabled.push(name);
+    for (const name of COMPUTER_TOOLS) if (await io.confirm(`  ${name}?`, true)) enabled.push(name);
   }
-  return { path: `${TOOLS_DIR}/${TOOLSET_FILE}`, text: builtInFile(PREBUILT_TOOLS, enabled, await choosePermission(io, "auto")) };
+  return { path: `${TOOLS_DIR}/${TOOLSET_FILE}`, text: builtInFile(COMPUTER_TOOLS, enabled, await choosePermission(io, "auto")) };
 }
 
 // A custom tool: its name, description and inputs, with a code block to fill in.
@@ -96,7 +96,7 @@ async function custom(dir: string, { tools }: Instance, io: Prompts): Promise<To
   const name = await io.text("Tool name? (letters, digits, _ and -)", "", {
     validate: (n: string) => {
       if (!/^[a-zA-Z0-9_-]{1,64}$/.test(n)) return "Use letters, digits, _ and -, up to 64 characters";
-      if (PREBUILT_TOOLS.includes(n)) return `${n} is a pre-built tool's name`;
+      if (COMPUTER_TOOLS.includes(n)) return `${n} is a computer tool's name`;
       if (/^(mcp__|ant__)/.test(n)) return "A custom tool's name can't start with mcp__ or ant__";
       if (taken.has(n) || existsSync(join(dir, TOOLS_DIR, `${n}.md`))) return `There's already a tool called ${n}`;
       return null;

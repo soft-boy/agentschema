@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import * as lib from "@soft-boy/agentschema";
 import * as nodeApi from "@soft-boy/agentschema/node";
-import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
+import { AGENT_MD, ENV_MD, COMPUTER_TOOLS_MD, instance, toolset } from "./helpers.js";
 
 const { agentBody, agentbookTools, checkFiles, editFrontmatter, scaffold, defaultAnswers, skillRefs, textStream } = lib;
 const { DeployError, check, deploy, deployFiles, hashBody, readFolder, skillFingerprint, startSession } = nodeApi;
@@ -166,7 +166,7 @@ test("the CLI warns about agentbook tools at check, and refuses them at deploy",
 test("deployFiles works from a file map and a lock object, and touches no disk", async () => {
   const client = fakeClient();
   const saved = [];
-  const files = { ...BASE, "tools/agent_toolset_20260401.md": PREBUILT_MD, "skills/review/SKILL.md": "---\nname: review\ndescription: Review code.\n---\n" };
+  const files = { ...BASE, "tools/agent_toolset_20260401.md": COMPUTER_TOOLS_MD, "skills/review/SKILL.md": "---\nname: review\ndescription: Review code.\n---\n" };
   const first = await deployFiles({
     files,
     lock: null,

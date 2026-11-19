@@ -89,7 +89,7 @@ An `instance` holds `{ agent, env, tools, vaults, skills, channels }`.
 |---|---|
 | `scaffold(answers)` | The files for a new agent, as `{ path: text }` |
 | `defaultAnswers(name)` | The answers `scaffold` uses when a question is skipped |
-| `builtInFile(names, enabled, permission)` | The pre-built tools' file. `permission` defaults to `auto` |
+| `builtInFile(names, enabled, permission)` | The computer tools' file. `permission` defaults to `auto` |
 | `mcpToolsetFile({ name, tools, permission })` | An MCP server's tool file. `permission` defaults to `always_ask` |
 | `agentbookTools(tools, toolsets)` | The agentbook tools a folder turns on, each with its effective `permission` |
 
@@ -129,7 +129,7 @@ See [Scheduled tasks](scheduled.md).
 
 - **Files:** `textOf`, `bytesOf`, `isIgnoredPath`, `pathsUnder`
 - **Names:** `AGENT_FILE`, `COMPUTER_FILE`, `OLD_COMPUTER_FILE` (`env.md`), `TOOLS_DIR`, `SKILLS_DIR`, `SKILL_FILE`, `VAULTS_DIR`, `VAULT_FILE`, `CHANNELS_DIR`, `SCHEDULED_DIR`, `SYSTEM_PROMPT_DIR`, `TOOLSET_FILE`
-- **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `PREBUILT_TOOLS`, `POLICIES`
+- **Tool types:** `TOOLSET`, `MCP_TOOLSET`, `AGENTBOOK`, `COMPUTER_TOOLS` (also exported as `PREBUILT_TOOLS`, its old name), `POLICIES`
 - **Credential types:** `MCP_OAUTH`, `ENV_VAR`, `CREDENTIAL_TYPES`, `SECRET_FIELDS`, `TOKEN_ENDPOINT_AUTH`
 - **Other:** `MODELS`, `NETWORKING`, `MAX_UPLOAD_BYTES`, `FileError`
 

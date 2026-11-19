@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { runTool } from "../src/chat.ts";
 import { check } from "../src/check.ts";
 import { agentBody } from "../lib/instance.ts";
-import { AGENT_MD, ENV_MD, PREBUILT_MD, instance, toolset } from "./helpers.js";
+import { AGENT_MD, ENV_MD, COMPUTER_TOOLS_MD, instance, toolset } from "./helpers.js";
 
 const READ_FILE_MD = `---
 type: custom
@@ -78,19 +78,19 @@ test("tools in agent.md's frontmatter are an error", () => {
   assert.match(check(instance({ "agent.md": md, "computer.md": ENV_MD })).errors[0], /define each tool as a file in tools\//);
 });
 
-test("the pre-built toolset file is checked", () => {
+test("the computer toolset file is checked", () => {
   const errs = (md, file = "tools/agent_toolset_20260401.md") => errorsFor({ [file]: md }).join("\n");
-  assert.match(errs(toolset("shell")), /`shell` is not a pre-built tool/);
+  assert.match(errs(toolset("shell")), /`shell` is not a computer tool/);
   assert.match(errs(toolset("bash", "bash")), /`bash` is listed twice/);
   assert.match(errs(toolset("bash | true | sometimes")), /permission `sometimes`/);
   assert.match(errs(toolset("bash | yes")), /`bash`: Enabled must be true or false/);
   assert.match(errs(toolset("bash |")), /`bash`: Enabled must be true or false/);
-  assert.match(errs(PREBUILT_MD.replace("---\n\n", "enabled: false\n---\n\n")), /unknown field `enabled`/);
-  assert.match(errs(PREBUILT_MD.replace("| Name | Enabled |", "| Name | On |")), /Tools table's columns/);
+  assert.match(errs(COMPUTER_TOOLS_MD.replace("---\n\n", "enabled: false\n---\n\n")), /unknown field `enabled`/);
+  assert.match(errs(COMPUTER_TOOLS_MD.replace("| Name | Enabled |", "| Name | On |")), /Tools table's columns/);
   assert.match(errs("---\ntype: plugin\n---\n"), /`type` must be/);
   // A 0.2.0-style file, one per tool with no table, points at the new layout.
-  assert.match(errs("---\ntype: agent_toolset_20260401\n---\n", "tools/bash.md"), /since 0\.2\.1 all pre-built tools go in one file/);
-  assert.match(errorsFor({ "tools/a.md": PREBUILT_MD, "tools/b.md": PREBUILT_MD })[0], /more than one `agent_toolset_20260401` file/);
+  assert.match(errs("---\ntype: agent_toolset_20260401\n---\n", "tools/bash.md"), /since 0\.2\.1 all computer tools go in one file/);
+  assert.match(errorsFor({ "tools/a.md": COMPUTER_TOOLS_MD, "tools/b.md": COMPUTER_TOOLS_MD })[0], /more than one `agent_toolset_20260401` file/);
 });
 
 test("the Permission column is optional", () => {
@@ -103,7 +103,7 @@ test("the Permission column is optional", () => {
 test("custom tools are checked", () => {
   const errs = (md, file = "read_file") => errorsFor({ [`tools/${file}.md`]: md }).join("\n");
   assert.match(errs(READ_FILE_MD, "reader"), /`name` must match the file name \(reader\)/);
-  assert.match(errs(READ_FILE_MD.replace(/read_file/g, "read"), "read"), /pre-built tool's name/);
+  assert.match(errs(READ_FILE_MD.replace(/read_file/g, "read"), "read"), /computer tool's name/);
   assert.match(errs(READ_FILE_MD.replace("description: Read a file and output its contents as a string.\n", "")), /`description` is required/);
   assert.match(errs(READ_FILE_MD.replace("`integer[]`", "`int`")), /input `lines` has type `int`/);
   assert.match(errs(READ_FILE_MD.replace("`false`", "`maybe`")), /Required must be true or false/);
@@ -129,9 +129,9 @@ test("a tool that throws returns an error result; non-strings are sent as JSON",
 });
 
 test("subfolders only organize: the same tools compile whatever folder they're in", () => {
-  const flat = check(folder({ "tools/agent_toolset_20260401.md": PREBUILT_MD, "tools/read_file.md": READ_FILE_MD })).instance;
+  const flat = check(folder({ "tools/agent_toolset_20260401.md": COMPUTER_TOOLS_MD, "tools/read_file.md": READ_FILE_MD })).instance;
   const nested = check(folder({
-    "tools/config/toolset.md": PREBUILT_MD,
+    "tools/config/toolset.md": COMPUTER_TOOLS_MD,
     "tools/files/io/read_file.md": READ_FILE_MD,
     "tools/.drafts/other.md": toolset("web_search"),
   })).instance;
@@ -141,4 +141,10 @@ test("subfolders only organize: the same tools compile whatever folder they're i
 test("two tools with the same name in different folders are an error", () => {
   const errors = errorsFor({ "tools/a/read_file.md": READ_FILE_MD, "tools/read_file.md": READ_FILE_MD });
   assert.match(errors[0], /more than one tool is named `read_file` \(tools\/a\/read_file\.md, tools\/read_file\.md\)/);
+});
+
+test("computer tools can still be found under their old name", async () => {
+  const lib = await import("../lib/index.ts");
+  assert.equal(lib.PREBUILT_TOOLS, lib.COMPUTER_TOOLS);
+  assert.ok(lib.COMPUTER_TOOLS.includes("bash"));
 });

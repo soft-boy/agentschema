@@ -7,7 +7,10 @@ export const TOOLSET = "agent_toolset_20260401";
 export const TOOLSET_FILE = `${TOOLSET}.md`;
 export const MCP_TOOLSET = "mcp_toolset";
 export const AGENTBOOK = "agentbook";
-export const PREBUILT_TOOLS = ["bash", "edit", "glob", "grep", "read", "web_fetch", "web_search", "write"];
+// The tools Claude runs on the agent's computer, its container, which computer.md describes.
+export const COMPUTER_TOOLS = ["bash", "edit", "glob", "grep", "read", "web_fetch", "web_search", "write"];
+/** @deprecated Their old name: use COMPUTER_TOOLS. */
+export const PREBUILT_TOOLS = COMPUTER_TOOLS;
 export const POLICIES = ["always_allow", "always_ask", "auto"];
 // agentbook tools reach the API as custom tools, which have no permission policy: agentbook
 // enforces these itself, and has nothing like the API's per-call `auto` judgement.
@@ -130,7 +133,7 @@ type Report = (message: string) => void;
 
 // Reads every .md file under tools/, in any subfolder, sorted by name. Folders are only for
 // organizing: a custom tool's name is its file name, and its path isn't compiled into anything.
-// The pre-built toolset is one file (by convention tools/agent_toolset_20260401.md) that lists its tools.
+// The computer toolset is one file (by convention tools/agent_toolset_20260401.md) that lists its tools.
 // No tools/ folder means no tools.
 // Returns { tools, errors }; a tool file that can't be parsed has an entry in errors.
 export function readTools(files: FileMap): ReadToolsResult {
@@ -157,7 +160,7 @@ export function readTools(files: FileMap): ReadToolsResult {
   }
   const toolsets = tools.filter((t) => t.data.type === TOOLSET);
   if (toolsets.length > 1) {
-    errors.push(`${TOOLS_DIR}: more than one \`${TOOLSET}\` file (${toolsets.map((t) => t.file).join(", ")}); list every pre-built tool in one file`);
+    errors.push(`${TOOLS_DIR}: more than one \`${TOOLSET}\` file (${toolsets.map((t) => t.file).join(", ")}); list every computer tool in one file`);
   }
   return { tools: tools.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)), errors };
 }
@@ -266,7 +269,7 @@ export function checkTools(tools: Tool[], errors: string[], warnings: string[] =
       checkAgentbook(tool, err, (msg) => warnings.push(`${tool.file}: ${msg}`), options);
       extra(["type", "toolset"]);
     } else {
-      err(`\`type\` must be \`${TOOLSET}\` (the pre-built tools), \`${MCP_TOOLSET}\` (an MCP server), \`custom\` or \`${AGENTBOOK}\``);
+      err(`\`type\` must be \`${TOOLSET}\` (the computer tools), \`${MCP_TOOLSET}\` (an MCP server), \`custom\` or \`${AGENTBOOK}\``);
     }
   }
 }
@@ -312,11 +315,11 @@ function checkAgentbook(tool: Tool, err: Report, warn: Report, { toolsets }: Che
 
 function checkToolset(tool: Tool, err: Report): void {
   if (!tool.rows) {
-    // 0.2.0 had one file per pre-built tool, with no table.
-    const hint = PREBUILT_TOOLS.includes(tool.name) ? `; since 0.2.1 all pre-built tools go in one file, ${TOOLS_DIR}/${TOOLSET_FILE}` : "";
-    return err(`a \`## Tools\` table listing the pre-built tools to enable is required${hint}`);
+    // 0.2.0 had one file per computer tool, with no table.
+    const hint = COMPUTER_TOOLS.includes(tool.name) ? `; since 0.2.1 all computer tools go in one file, ${TOOLS_DIR}/${TOOLSET_FILE}` : "";
+    return err(`a \`## Tools\` table listing the computer tools to enable is required${hint}`);
   }
-  checkRows(tool.rows, err, { known: PREBUILT_TOOLS, what: "a pre-built tool" });
+  checkRows(tool.rows, err, { known: COMPUTER_TOOLS, what: "a computer tool" });
 }
 
 // The rows of a `## Tools` table. `known` is the list of valid tool names, when there is one.
@@ -338,7 +341,7 @@ function checkCustom(tool: Tool, err: Report): void {
   const { name, description } = tool.data;
   if (name !== tool.name) err(`\`name\` must match the file name (${tool.name})`);
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(tool.name)) err("the name may only use letters, digits, _ and -, up to 64 characters");
-  if (PREBUILT_TOOLS.includes(tool.name)) err(`\`${tool.name}\` is a pre-built tool's name; the API rejects custom tools that reuse one`);
+  if (COMPUTER_TOOLS.includes(tool.name)) err(`\`${tool.name}\` is a computer tool's name; the API rejects custom tools that reuse one`);
   if (/^(mcp__|ant__)/.test(tool.name)) err("custom tool names can't start with mcp__ or ant__");
   if (typeof description !== "string" || description.trim() === "") err("`description` is required");
 
@@ -396,14 +399,14 @@ export function agentbookTools(tools: Tool[], toolsets: AgentbookCatalog = {}): 
   });
 }
 
-// The tools list sent to the API, each kind sorted by name: the pre-built toolset with a config
+// The tools list sent to the API, each kind sorted by name: the computer toolset with a config
 // for each row of its table (tools it doesn't list keep the API's defaults), then a toolset for
 // each MCP server, then the custom tools, and last agentbook's tools, which reach the API as
 // custom tools. Only their name, description and input schema are sent.
 export function compileTools(tools: Tool[], { toolsets }: CompileOptions = {}): CompiledTool[] {
   const compiled: CompiledTool[] = [];
   const toolset = tools.find((t) => t.data.type === TOOLSET);
-  // check requires the pre-built toolset's table, so its rows are there.
+  // check requires the computer toolset's table, so its rows are there.
   if (toolset) compiled.push({ type: TOOLSET, configs: configs(toolset.rows!) });
   for (const tool of byName(tools.filter((t) => t.data.type === MCP_TOOLSET))) {
     const entry: CompiledMcpToolset = { type: MCP_TOOLSET, mcp_server_name: tool.name };

@@ -6,7 +6,7 @@ A file's `type` says what it is:
 
 | `type` | What it is | Where it runs |
 |---|---|---|
-| `agent_toolset_20260401` | The [pre-built tools](#pre-built-tools) | The agent's container |
+| `agent_toolset_20260401` | The [computer tools](#computer-tools) | The agent's container |
 | `mcp_toolset` | A [remote MCP server's tools](#mcp-toolsets) | The MCP server |
 | `custom` | A [tool you write](#custom-tools) in JavaScript | The machine running `agentschema run` |
 | `agentbook` | A [toolset from a host's catalog](#agentbook-toolsets) | The host |
@@ -33,15 +33,17 @@ What a blank permission means depends on the kind of tool:
 
 | Kind | A blank permission means |
 |---|---|
-| Pre-built tools | The API's default, `always_allow`. `auto` is what the API recommends, and what `init` writes |
+| Computer tools | The API's default, `always_allow`. `auto` is what the API recommends, and what `init` writes |
 | MCP toolsets | The file's `default_config`, or else the API's default, `always_ask` |
 | Agentbook toolsets | `always_ask`. They have no `auto` |
 
 Custom tools have no permissions: when one is called, your code runs.
 
-## Pre-built tools
+## Computer tools
 
-The tools Claude runs in the agent's container: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search` and `write`. They all go in one file, by convention `tools/agent_toolset_20260401.md`. Two such files are an error.
+The tools Claude runs on the agent's computer, its container, which [`computer.md`](computer.md) describes: `bash`, `edit`, `glob`, `grep`, `read`, `web_fetch`, `web_search` and `write`. They all go in one file, by convention `tools/agent_toolset_20260401.md`. Two such files are an error.
+
+They used to be called pre-built tools. Only the name changed: the file and its `type` are the same.
 
 ```markdown path=tools/agent_toolset_20260401.md
 ---
@@ -60,7 +62,7 @@ The tools Claude runs in the agent's container. Set Enabled to false to turn a t
 ```
 
 - The `## Tools` table is required. Its columns are `Name | Enabled`, or `Name | Enabled | Permission`.
-- Each name must be a pre-built tool, listed once.
+- Each name must be a computer tool, listed once.
 - Enabled is `true` or `false`.
 - A tool the table doesn't list keeps the API's defaults, so list all eight to be sure of what's on.
 
@@ -122,7 +124,7 @@ Set Enabled to false to turn a tool off.
 
 `url` is refused, because the URL belongs in `agent.md`.
 
-The `## Tools` table is optional, and uses the same columns as the pre-built tools. Names are whatever the server reports. Without a table, every tool the server offers gets the defaults.
+The `## Tools` table is optional, and uses the same columns as the computer tools. Names are whatever the server reports. Without a table, every tool the server offers gets the defaults.
 
 A tool the server adds later isn't in the table, so it gets the defaults too: on, and asking before each call unless `default_config` says otherwise.
 
@@ -164,7 +166,7 @@ module.exports = async ({ city }) => {
 ```
 ````
 
-**`name`** must match the file name, and may use letters, digits, `_` and `-`, up to 64 characters. It can't be a pre-built tool's name, or start with `mcp__` or `ant__`, because the API rejects those. It must be unique across all of `tools/`, since folders are dropped.
+**`name`** must match the file name, and may use letters, digits, `_` and `-`, up to 64 characters. It can't be a computer tool's name, or start with `mcp__` or `ant__`, because the API rejects those. It must be unique across all of `tools/`, since folders are dropped.
 
 **`description`** is required. Claude reads it to decide when to call the tool, so it's worth writing well.
 

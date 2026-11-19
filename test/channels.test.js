@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { CHANNEL_TYPES, channelSettings, channelSystem, durationMs, readChannels } from "../lib/channels.ts";
 import { checkFiles } from "../lib/check.ts";
 import { agentBody } from "../lib/instance.ts";
-import { AGENT_MD, ENV_MD, PREBUILT_MD } from "./helpers.js";
+import { AGENT_MD, ENV_MD, COMPUTER_TOOLS_MD } from "./helpers.js";
 
 const BASE = { "agent.md": AGENT_MD, "computer.md": ENV_MD };
 const file = (front, body = "") => `---\n${front}\n---\n\n${body}`;
@@ -40,8 +40,8 @@ test("an agent doesn't need any channels", () => {
 });
 
 test("channels never reach the API", () => {
-  const without = checked({ "tools/agent_toolset_20260401.md": PREBUILT_MD }).instance;
-  const withOne = checked({ "tools/agent_toolset_20260401.md": PREBUILT_MD, "channels/c.md": file(VALID.telegram, "Be brief.") }).instance;
+  const without = checked({ "tools/agent_toolset_20260401.md": COMPUTER_TOOLS_MD }).instance;
+  const withOne = checked({ "tools/agent_toolset_20260401.md": COMPUTER_TOOLS_MD, "channels/c.md": file(VALID.telegram, "Be brief.") }).instance;
   assert.deepEqual(agentBody(withOne), agentBody(without));
 });
 
@@ -205,8 +205,8 @@ test("the warning is only for channels anyone can reach", () => {
   assert.deepEqual(withBank(allowed, 'type: telegram\nallow: "*"\nenabled: false').warnings, []);
 });
 
-test("pre-built tools don't count, since they run in the session's own container", () => {
-  assert.deepEqual(checked({ "tools/agent_toolset_20260401.md": PREBUILT_MD, "channels/c.md": file(VALID.telegram) }).warnings, []);
+test("computer tools don't count, since they run in the session's own container", () => {
+  assert.deepEqual(checked({ "tools/agent_toolset_20260401.md": COMPUTER_TOOLS_MD, "channels/c.md": file(VALID.telegram) }).warnings, []);
 });
 
 test("agentbook tools count, unless they never run on a live agent, or are safe for anyone", () => {

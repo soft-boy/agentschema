@@ -14,11 +14,11 @@ Every command but `init`, `check` and `tools create` calls the API. They use `AN
 
 ### `init <name>`
 
-Scaffolds a new agent folder, and refuses a folder that already has something in it. It asks for a name, model, system prompt, whether to give it the pre-built tools and with what permission, an environment name, and its networking.
+Scaffolds a new agent folder, and refuses a folder that already has something in it. It asks for a name, model, system prompt, whether to give it the computer tools and with what permission, an environment name, and its networking.
 
 | Option | What it does |
 |---|---|
-| `-y`, `--yes` | Skips the questions. The defaults are `claude-opus-5-5`, all eight pre-built tools on `auto`, and limited networking with package managers allowed |
+| `-y`, `--yes` | Skips the questions. The defaults are `claude-opus-5-5`, all eight computer tools on `auto`, and limited networking with package managers allowed |
 
 ### `check [dir]`
 
@@ -57,7 +57,7 @@ Archives an agent. Agents can't be deleted outright, an archived agent drops out
 
 Adds a tool, asking which kind:
 
-- **Pre-built tools:** writes `tools/agent_toolset_20260401.md`, asking which to turn on and with what permission. It refuses if the agent already has that file.
+- **Computer tools:** writes `tools/agent_toolset_20260401.md`, asking which to turn on and with what permission. It refuses if the agent already has that file.
 - **A custom tool:** asks for its name, description and inputs, and writes a file with code to fill in.
 - **An MCP server:** asks for its URL, name and permission, adds it to `mcp_servers` in `agent.md` if needed, asks the server for its tools, and writes the file.
 

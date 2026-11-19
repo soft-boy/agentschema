@@ -29,7 +29,7 @@ Commands:
   run [dir]             Chat with the deployed agent in a new session, loading dir/.env for your tools
   list                  List the agents in your workspace
   delete <agent_id>     Archive an agent (agents can't be deleted outright)
-  tools <command>       Add pre-built tools, custom tools and MCP servers (agentschema tools -h)
+  tools <command>       Add computer tools, custom tools and MCP servers (agentschema tools -h)
   sessions <command>    List and delete sessions (agentschema sessions -h)
   cred <command>        Create and manage the credentials in vaults/ (agentschema cred -h)
 
@@ -46,11 +46,11 @@ ${FOOTER}`;
 
 const TOOLS_USAGE = `Usage: agentschema tools <command> [options]
 
-Each tool is a file in tools/. The pre-built tools share one file, each custom tool has its own,
+Each tool is a file in tools/. The computer tools share one file, each custom tool has its own,
 and so does each MCP server.
 
 Commands:
-  create [dir]    Add a tool: asks whether it's the pre-built tools, a custom tool or an
+  create [dir]    Add a tool: asks whether it's the computer tools, a custom tool or an
                   MCP server, then writes its file
 
 Options:

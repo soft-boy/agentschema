@@ -13,7 +13,7 @@ export { SYSTEM_PROMPT_DIR, readSystemPrompt, systemPromptOf } from "./system-pr
 export { MAX_UPLOAD_BYTES, SKILLS_DIR, SKILL_FILE, readSkills, skillKey, skillRefs } from "./skills.ts";
 export { agentMessageText, textStream } from "./stream.ts";
 export {
-  AGENTBOOK, MCP_TOOLSET, POLICIES, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR,
+  AGENTBOOK, MCP_TOOLSET, POLICIES, COMPUTER_TOOLS, PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR,
   agentbookTools, compileTools, mcpToolsetFile, readTools,
 } from "./tools.ts";
 export {

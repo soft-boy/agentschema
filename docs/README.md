@@ -38,7 +38,7 @@ my-agent/
 ├── system_prompt/                    # more of the system prompt, in tree order
 │   └── rules.md
 ├── tools/                            # what it can do
-│   ├── agent_toolset_20260401.md     # the pre-built tools to enable
+│   ├── agent_toolset_20260401.md     # the computer tools to enable
 │   ├── linear.md                     # an MCP server's tools
 │   └── get_weather.md                # a custom tool
 ├── skills/                           # instructions it loads when needed
@@ -92,7 +92,7 @@ my-agent/
 - [`agent.md`](agent.md): the agent
 - [`system_prompt/`](system_prompt.md): a long system prompt, split into files
 - [`computer.md`](computer.md): the computer it runs on
-- [`tools/`](tools.md): pre-built tools, MCP servers, custom tools and agentbook toolsets
+- [`tools/`](tools.md): computer tools, MCP servers, custom tools and agentbook toolsets
 - [`skills/`](skills.md): instructions loaded when needed
 - [`vaults/`](vaults.md): credentials
 - [`channels/`](channels.md): places people can talk to the agent

@@ -19,7 +19,7 @@ const menu = (lines) => {
 };
 const folder = (files = {}) => instance({ "agent.md": AGENT_MD, "computer.md": ENV_MD, ...files });
 
-test("tools create writes the pre-built toolset, with the tools you pick", async () => {
+test("tools create writes the computer toolset, with the tools you pick", async () => {
   const dir = folder();
   // kind, all eight?, then bash yes and the rest no, then the permission: the second choice
   await toolsCreate(dir, { io: menu(["1", "n", "y", "n", "n", "n", "n", "n", "n", "n", "2"]) });
@@ -31,7 +31,7 @@ test("tools create writes the pre-built toolset, with the tools you pick", async
   // Off or on, every row says what was chosen, so nothing's left blank to wonder about.
   assert.ok(configs.every((c) => c.permission_policy.type === "always_allow"));
 
-  await assert.rejects(toolsCreate(dir, { io: menu(["1"]) }), /already has its pre-built tools in tools\/agent_toolset_20260401\.md/);
+  await assert.rejects(toolsCreate(dir, { io: menu(["1"]) }), /already has its computer tools in tools\/agent_toolset_20260401\.md/);
 });
 
 test("tools create writes a custom tool whose stub passes check and reports it isn't implemented", async () => {

@@ -344,7 +344,7 @@ function checkShared(data: Frontmatter, type: ChannelType, err: Report, warn: Re
 }
 
 // The tools that act through the owner's sign-ins and connections without anyone approving each call.
-// Pre-built tools aren't here, since they run in the session's own container. In a toolset's table, a
+// Computer tools aren't here, since they run in the session's own container. In a toolset's table, a
 // blank permission means the file's default, which for an MCP server is the API's default of asking.
 function toolsThatRunUnasked(tools: Tool[], toolsets: AgentbookCatalog | undefined): string[] {
   const isOn = (row: ToolRow): boolean => row.enabled.toLowerCase() === "true";

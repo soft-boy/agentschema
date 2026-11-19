@@ -36,7 +36,7 @@ export async function init(dir: string, { yes = false, input = process.stdin, ou
     writeFileSync(resolve(dir, file), text);
   }
 
-  const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${TOOLSET_FILE} with the pre-built tools (set Enabled to false to turn one off)` : "";
+  const tools = answers.tools ? `, and ${dir}/${TOOLS_DIR}/${TOOLSET_FILE} with the computer tools (set Enabled to false to turn one off)` : "";
   output.write(`\nCreated ${dir}/${AGENT_FILE} and ${dir}/${COMPUTER_FILE}${tools}.\n\nNext:\n`);
   output.write(`  agentschema deploy ${dir}\n  agentschema run ${dir}\n`);
   return files;

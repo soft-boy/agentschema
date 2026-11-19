@@ -1,6 +1,6 @@
 import { stringify } from "yaml";
 import { AGENT_FILE, COMPUTER_FILE } from "./instance.ts";
-import { PREBUILT_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR } from "./tools.ts";
+import { COMPUTER_TOOLS, TOOLSET, TOOLSET_FILE, TOOLS_DIR } from "./tools.ts";
 
 export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 export const NETWORKING = ["limited", "unrestricted"];
@@ -33,7 +33,7 @@ export function defaultAnswers(name: string): Answers {
 }
 
 // Returns { path: text } for a set of answers: agent.md, env.md, and tools/agent_toolset_20260401.md
-// listing every pre-built tool when the agent gets them.
+// listing every computer tool when the agent gets them.
 export function scaffold(answers: Answers): Record<string, string> {
   const agent = { name: answers.name, model: answers.model };
 
@@ -49,12 +49,12 @@ export function scaffold(answers: Answers): Record<string, string> {
     [COMPUTER_FILE]: `---\n${stringify(env)}---\nCloud container with ${access}.\n`,
   };
   if (answers.tools) {
-    files[`${TOOLS_DIR}/${TOOLSET_FILE}`] = builtInFile(PREBUILT_TOOLS, PREBUILT_TOOLS, answers.permission);
+    files[`${TOOLS_DIR}/${TOOLSET_FILE}`] = builtInFile(COMPUTER_TOOLS, COMPUTER_TOOLS, answers.permission);
   }
   return files;
 }
 
-// The pre-built toolset file, with a row for each of `names`: on if it's in `enabled`, each with
+// The computer toolset file, with a row for each of `names`: on if it's in `enabled`, each with
 // `permission`, so what's chosen is there to read and change. `auto` is what the API recommends for
 // these tools: Anthropic judges each call, and asks when it can't tell.
 export function builtInFile(names: string[], enabled: string[] = names, permission = "auto"): string {
